@@ -741,8 +741,17 @@ def main():
     rss_content = build_rss(all_items)
 
     if args.dry_run:
-        print("\n--- RSS 预览（前500字符）---")
-        print(rss_content[:500])
+        print(f"\n{'='*50}")
+        print("详细信息：")
+        print(f"{'='*50}")
+        for i, item in enumerate(all_items, 1):
+            print(f"\n--- [{i}] ---")
+            print(f"标题: {item.title}")
+            print(f"来源: {item.source}")
+            print(f"日期: {item.pub_date_raw}")
+            print(f"链接: {item.link}")
+            if item.description:
+                print(f"摘要: {item.description[:200]}")
         return
 
     output_path = Path(args.output)
