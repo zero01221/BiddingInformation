@@ -118,7 +118,7 @@ def make_headers(referer: str = "") -> dict:
         "User-Agent": random_ua(),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
+        # 不设置 Accept-Encoding，让 requests 自动处理解压
         "Connection": "keep-alive",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
@@ -268,6 +268,151 @@ def contains_keyword(text: str, keywords: List[str]) -> bool:
     return any(kw in text for kw in keywords)
 
 
+def fetch_detail_content(url: str, timeout: int = 15) -> str:
+    """
+    获取招标详情页的正文内容，用于提取地区信息。
+    返回提取的文本内容，失败返回空字符串。
+    """
+    if not url or not url.startswith("http"):
+        return ""
+    
+    try:
+        resp = requests.get(
+            url,
+            headers=make_headers(),
+            timeout=timeout,
+            allow_redirects=True,
+            proxies={"http": None, "https": None},
+        )
+        resp.raise_for_status()
+        # 尝试多种编码
+        resp.encoding = resp.apparent_encoding or "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
+        # 移除脚本和样式
+        for script in soup(["script", "style", "nav", "header", "footer"]):
+            script.decompose()
+        
+        # 尝试常见的内容容器选择器
+        content_selectors = [
+            "div.content", "div.detail-content", "div.article-content",
+            "div.main-content", "div#content", "div.container",
+            "article", "main", "div.text", "div.description",
+        ]
+        
+        content_text = ""
+        for selector in content_selectors:
+            content_el = soup.select_one(selector)
+            if content_el:
+                content_text = content_el.get_text(separator=" ", strip=True)
+                break
+        
+        # 如果没找到特定容器，获取 body 文本
+        if not content_text:
+            body = soup.find("body")
+            if body:
+                content_text = body.get_text(separator=" ", strip=True)
+        
+        # 限制长度，避免过长
+        return content_text[:5000] if content_text else ""
+        
+    except Exception as e:
+        print(f"  [警告] 获取详情页失败 {url}: {e}")
+        return ""
+
+
+def extract_region_from_content(content: str) -> str:
+    """
+    从正文内容中提取地区信息。
+    返回找到的地区关键词，未找到返回空字符串。
+    """
+    if not content:
+        return ""
+    
+    # 常见的地区信息模式
+    patterns = [
+        r"项目所在地区[：:]\s*([^\n,，。]+)",
+        r"所在地区[：:]\s*([^\n,，。]+)",
+        r"地区[：:]\s*([^\n,，。]+)",
+        r"建设地点[：:]\s*([^\n,，。]+)",
+        r"项目地点[：:]\s*([^\n,，。]+)",
+        r"工程地点[：:]\s*([^\n,，。]+)",
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, content)
+        if match:
+            location = match.group(1).strip()
+            # 检查是否包含云南相关关键词
+            for kw in REGION_KEYWORDS:
+                if kw in location:
+                    return kw
+    
+    # 直接检查内容中是否包含地区关键词
+    for kw in REGION_KEYWORDS:
+        if kw in content:
+            return kw
+    
+    return ""
+
+
+def should_include_with_detail(title: str, url: str, description: str = "", 
+                               require_yunnan: bool = True, 
+                               fetch_detail: bool = True) -> Tuple[bool, str]:
+    """
+    判断标题是否应该保留，支持访问详情页提取地区信息。
+    
+    返回：(是否保留, 提取到的地区信息)
+    
+    过滤逻辑：
+      1. 标题必须非空且长度 >= 5
+      2. 标题或描述必须匹配至少一个核心关键词（铁塔相关）
+      3. 如果 require_yunnan=True，检查标题/描述/正文中的地区信息
+      4. 不能匹配任何排除关键词
+    """
+    if not title or len(title) < 5:
+        return False, ""
+
+    # 合并标题和描述用于检查
+    full_text = title + " " + description
+
+    # 黑名单排除（只检查标题）
+    if contains_keyword(title, EXCLUDE_KEYWORDS):
+        return False, ""
+
+    # 必须有核心关键词（铁塔相关）- 检查标题和描述
+    has_core_keyword = contains_keyword(full_text, CORE_KEYWORDS)
+    if not has_core_keyword:
+        # 如果没有核心关键词，检查地区+行业组合
+        has_region = contains_keyword(full_text, REGION_KEYWORDS)
+        has_industry = contains_keyword(full_text, INDUSTRY_KEYWORDS)
+        if not (has_region and has_industry):
+            return False, ""
+
+    # 地区过滤
+    if require_yunnan:
+        # 先检查标题和描述中是否有地区信息
+        if contains_keyword(full_text, REGION_KEYWORDS):
+            return True, "标题/描述中包含地区"
+        
+        # 如果标题/描述中没有地区信息，且允许访问详情页
+        if fetch_detail and url:
+            print(f"    [正文检查] 标题无地区信息，获取详情页...")
+            detail_content = fetch_detail_content(url)
+            if detail_content:
+                region = extract_region_from_content(detail_content)
+                if region:
+                    print(f"    [正文检查] 从正文中提取到地区: {region}")
+                    return True, region
+                else:
+                    print(f"    [正文检查] 正文中未找到云南地区信息")
+        
+        # 没有找到地区信息，排除
+        return False, ""
+
+    return True, ""
+
+
 def should_include(title: str, description: str = "", require_yunnan: bool = True) -> bool:
     """
     判断标题是否应该保留。
@@ -333,8 +478,14 @@ def try_selectors(soup_or_element, selectors: List[str]):
     return []
 
 
-def parse_site(site: SiteConfig) -> List[BiddingItem]:
-    """爬取单个网站，返回过滤后的招标条目"""
+def parse_site(site: SiteConfig, enable_detail_check: bool = False) -> List[BiddingItem]:
+    """
+    爬取单个网站，返回过滤后的招标条目
+    
+    参数：
+      site: 网站配置
+      enable_detail_check: 是否启用详情页正文检查（用于标题无地区信息时检查正文）
+    """
     print(f"\n[{site.name}] 开始抓取: {site.url}")
     post_data = site.extra_params.get("post_data") if site.extra_params else None
     soup = fetch_page(site.url, encoding=site.encoding, post_data=post_data)
@@ -373,11 +524,7 @@ def parse_site(site: SiteConfig) -> List[BiddingItem]:
             desc_els = try_selectors(raw, site.desc_selectors) if hasattr(site, 'desc_selectors') else []
             desc = extract_text(desc_els[0]) if desc_els else ""
             
-            # 过滤（同时检查标题和描述）
-            if not should_include(title, desc):
-                continue
-
-            # 提取链接
+            # 提取链接（需要在过滤前提取，用于详情页检查）
             link_els = try_selectors(raw, site.link_selectors)
             href = ""
             if link_els:
@@ -392,13 +539,27 @@ def parse_site(site: SiteConfig) -> List[BiddingItem]:
                     href = parent_a.get("href", "")
             url = normalize_url(href, site.base_url) if href else site.url
 
+            # 过滤
+            if enable_detail_check:
+                # 启用详情页检查：对于标题无地区信息的条目，访问详情页检查正文
+                included, region_info = should_include_with_detail(title, url, desc, require_yunnan=True, fetch_detail=True)
+                if not included:
+                    continue
+                # 如果从详情页提取到地区信息，添加到描述中
+                if region_info and region_info not in desc:
+                    desc = f"{desc} [正文地区:{region_info}]".strip()
+            else:
+                # 普通过滤：不访问详情页
+                if not should_include(title, desc):
+                    continue
+
             # 提取日期：先找 span，找不到则从 URL 中提取（如 t20260512_ 格式）
             date_els = try_selectors(raw, site.date_selectors)
             date_raw = extract_text(date_els[0]) if date_els else ""
             if not date_raw:
                 # 从 href 中提取 YYYYMMDD
                 m = re.search(r"(\d{4})(\d{2})(\d{2})", href)
-                date_raw = f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else ""
+                date_raw = f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}" if m else ""
             # 清理日期文本中的前缀（如 "发布时间："）
             date_raw = re.sub(r"^[^0-9]*", "", date_raw)
             pub_date = parse_date(date_raw)
@@ -430,10 +591,18 @@ CCGP_SEARCH_URL = "http://search.ccgp.gov.cn/bxsearch"
 
 
 def fetch_ccgp_search(keyword: str, start_time: str = "", end_time: str = "",
-                      page_index: int = 1) -> List[BiddingItem]:
+                      page_index: int = 1, display_zone: str = "云南", zone_id: str = "53") -> List[BiddingItem]:
     """
     通过中国政府采购网搜索 API 获取招标公告。
     搜索地址: http://search.ccgp.gov.cn/bxsearch
+    
+    参数：
+      keyword: 搜索关键词
+      start_time: 开始时间，格式 YYYY:MM:DD
+      end_time: 结束时间，格式 YYYY:MM:DD
+      page_index: 页码
+      display_zone: 地区名称，如"云南"
+      zone_id: 地区 ID，云南省为 53
     """
     from datetime import datetime as dt
     if not end_time:
@@ -454,13 +623,14 @@ def fetch_ccgp_search(keyword: str, start_time: str = "", end_time: str = "",
         "start_time": start_time,
         "end_time": end_time,
         "timeType": 2,
-        "displayZone": "",
-        "zoneId": "",
+        "displayZone": display_zone,  # 地区名称
+        "zoneId": zone_id,            # 地区 ID（云南省=53）
         "pppStatus": 0,
         "agentName": "",
     }
 
-    print(f"\n[中国政府采购网] 搜索关键词: {keyword}")
+    zone_info = f"{display_zone}(zoneId={zone_id})" if display_zone else "全国"
+    print(f"\n[中国政府采购网] 搜索关键词: {keyword}, 地区: {zone_info}")
     soup = fetch_page(CCGP_SEARCH_URL, params=params,
                       referer="http://www.ccgp.gov.cn/")
     if not soup:
@@ -491,8 +661,9 @@ def fetch_ccgp_search(keyword: str, start_time: str = "", end_time: str = "",
         desc_tag = li.select_one("p") or li.select_one("span.desc") or li.select_one("div.desc")
         desc = extract_text(desc_tag) if desc_tag else ""
 
-        # 过滤（同时检查标题和描述）
-        if not should_include(title, desc):
+        # 过滤：由于已通过 URL 参数限制地区为云南，这里不再强制要求地区关键词
+        # require_yunnan=False 表示不强制要求地区关键词（网站已做地区过滤）
+        if not should_include(title, desc, require_yunnan=False):
             continue
 
         href = a_tag.get("href", "")
@@ -572,7 +743,7 @@ RSS_TEMPLATE = """\
   <channel>
     <title>云南铁塔制造招标信息</title>
     <link>https://github.com</link>
-    <description>聚合云南地区铁塔制造相关招标公告，来源：中国政府采购网、云南省公共资源交易中心、中国采购与招标网</description>
+    <description>聚合云南地区铁塔制造相关招标公告，来源：中国政府采购网、云南省公共资源交易中心、中国采购与招标网、乙方宝</description>
     <language>zh-cn</language>
     <lastBuildDate>{build_date}</lastBuildDate>
     <ttl>1440</ttl>
@@ -623,7 +794,10 @@ YNGGZY_TRADE_TYPES = [
 
 
 def fetch_ynggzy_api(trade_type: str, page: int = 1, page_size: int = 20) -> List[BiddingItem]:
-    """调用云南省公共资源交易中心 JSON API"""
+    """调用云南省公共资源交易中心 JSON API
+    
+    注意：该网站本身全是云南省的信息，因此只需匹配铁塔关键词，无需再检查地区
+    """
     api_url = f"https://ggzy.yn.gov.cn/ynggfwpt-home-api/jyzyCenter/jyInfo/{trade_type}/getZbggList"
     payload = {
         "pageNum": page,
@@ -672,12 +846,13 @@ def fetch_ynggzy_api(trade_type: str, page: int = 1, page_size: int = 20) -> Lis
             if not title:
                 continue
 
-            # 提取地区信息作为描述（用于过滤）
+            # 提取地区信息作为描述（仅用于展示，不用于过滤）
             area = row.get("jyptid", "") or row.get("areaName", "")
             desc = f"地区：{area}"
 
-            # 关键词过滤（同时检查标题和描述）
-            if not should_include(title, desc):
+            # 关键词过滤：该网站本身全是云南省信息，只需匹配铁塔关键词，无需检查地区
+            # require_yunnan=False 表示不强制要求地区关键词
+            if not should_include(title, desc, require_yunnan=False):
                 continue
 
             guid = row.get("guid", "")
@@ -716,6 +891,154 @@ def fetch_ynggzy() -> List[BiddingItem]:
             time.sleep(random.randint(3, 8))
     print(f"  过滤后保留 {len(all_items)} 条招标信息")
     return all_items
+
+
+# ─────────────────────────────────────────────────────────────
+# 全国招标采购信息平台（乙方宝）爬取
+# ─────────────────────────────────────────────────────────────
+
+YFBZB_SEARCH_URL = "https://www.yfbzb.com/search/invitedBidSearch"
+# 云南省的 provinceId（需要通过实际请求确认）
+YFBZB_YUNNAN_PROVINCE_ID = "2358"  # 暂定，可能需要调整
+
+
+def fetch_yfbzb_search(keyword: str, province_id: str = "", page_no: int = 1, page_size: int = 20) -> List[BiddingItem]:
+    """
+    通过乙方宝搜索 API 获取招标公告。
+    
+    参数：
+      keyword: 搜索关键词
+      province_id: 省份 ID（为空则全国）
+      page_no: 页码
+      page_size: 每页大小
+    """
+    params = {
+        "defaultSearch": "true",
+        "keyword": keyword,
+        "pageNo": page_no,
+        "pageSize": page_size,
+    }
+    if province_id:
+        params["provinceId"] = province_id
+
+    province_info = f"省份ID={province_id}" if province_id else "全国"
+    print(f"\n[乙方宝] 搜索关键词: {keyword}, 地区: {province_info}")
+    
+    soup = fetch_page(YFBZB_SEARCH_URL, params=params,
+                      referer="https://www.yfbzb.com/")
+    if not soup:
+        return []
+
+    items = []
+
+    # 乙方宝搜索结果在表格中
+    table = soup.select_one("table")
+    if not table:
+        print("  [警告] 未找到表格")
+        return []
+    
+    rows = table.select("tbody tr")
+    print(f"  找到 {len(rows)} 个搜索结果")
+
+    for row in rows:
+        # 提取标题和链接
+        title_td = row.select_one("td:first-child")
+        if not title_td:
+            continue
+        
+        a_tag = title_td.find("a")
+        if not a_tag:
+            continue
+
+        title = a_tag.get_text(strip=True)
+        if not title or len(title) < 5:
+            continue
+
+        # 清理标题
+        title = re.sub(r"^\[.*?\]", "", title).strip()
+
+        # 提取地区（第3列）
+        area_td = row.select_one("td:nth-child(3)")
+        area = area_td.get_text(strip=True) if area_td else ""
+        
+        # 提取描述（包含地区信息）
+        desc = f"地区：{area}" if area else ""
+
+        # 过滤：检查标题和地区
+        # 如果指定了省份ID，网站已经做了地区过滤，只需检查铁塔关键词
+        # 如果没有指定省份ID，需要检查地区是否包含云南
+        if province_id:
+            # 网站已做地区过滤，只需匹配铁塔关键词
+            if not should_include(title, desc, require_yunnan=False):
+                continue
+        else:
+            # 需要检查地区是否包含云南
+            # 由于乙方宝是全国性网站，需要检查地区信息
+            if not should_include(title, desc, require_yunnan=True):
+                continue
+
+        href = a_tag.get("href", "")
+        url = normalize_url(href, "https://www.yfbzb.com")
+
+        # 提取日期（第4列）
+        date_td = row.select_one("td:nth-child(4)")
+        date_raw = ""
+        if date_td:
+            date_raw = date_td.get_text(strip=True)
+            # 提取日期部分
+            m = re.search(r"(\d{4})[.\-/年](\d{1,2})[.\-/月](\d{1,2})", date_raw)
+            if m:
+                date_raw = f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
+            else:
+                date_raw = ""
+
+        pub_date = parse_date(date_raw)
+
+        # 构建描述
+        desc = f"来源：乙方宝 地区：{area} 发布时间：{date_raw or '未知'}"
+
+        items.append(BiddingItem(
+            title=title,
+            url=url,
+            pub_date=pub_date,
+            pub_date_raw=date_raw or "未知日期",
+            source="乙方宝",
+            description=desc,
+        ))
+
+    print(f"  过滤后保留 {len(items)} 条招标信息")
+    return items
+
+
+def fetch_yfbzb() -> List[BiddingItem]:
+    """爬取乙方宝，使用多个关键词搜索"""
+    all_items: List[BiddingItem] = []
+    # 搜索关键词：铁塔相关
+    keywords = [
+        "铁塔",
+        "塔桅",
+    ]
+
+    for i, kw in enumerate(keywords):
+        if i > 0:
+            time.sleep(random.randint(3, 6))
+        try:
+            # 不限制省份ID，搜索全国数据，然后在过滤时检查地区
+            # 因为 provinceId 可能不准确，而且我们需要检查正文中的地区信息
+            items = fetch_yfbzb_search(kw, province_id="", page_no=1)
+            all_items.extend(items)
+        except Exception as e:
+            print(f"  [错误] 乙方宝搜索 '{kw}' 失败: {e}")
+
+    # 去重（按 URL）
+    seen_urls = set()
+    unique_items = []
+    for item in all_items:
+        if item.url not in seen_urls:
+            seen_urls.add(item.url)
+            unique_items.append(item)
+
+    return unique_items
 
 
 # ─────────────────────────────────────────────────────────────
@@ -759,6 +1082,16 @@ def main():
         all_items.extend(yn_items)
     except Exception as e:
         print(f"  [错误] 云南省公共资源交易中心爬取异常: {e}")
+
+    # 4. 爬取全国招标采购信息平台（乙方宝）
+    wait = args.interval + random.randint(0, 10)
+    print(f"\n等待 {wait} 秒后继续...")
+    time.sleep(wait)
+    try:
+        yfbzb_items = fetch_yfbzb()
+        all_items.extend(yfbzb_items)
+    except Exception as e:
+        print(f"  [错误] 乙方宝爬取异常: {e}")
 
     # 全局去重（按 URL）
     seen_urls = set()

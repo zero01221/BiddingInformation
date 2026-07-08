@@ -75,3 +75,33 @@
 - 虚拟环境未创建时需先运行 `uv sync`
 - MCP HTTP 服务默认端口 3333，注意不要与系统端口冲突
 - 推送渠道需在 GitHub Secrets 或环境变量中配置 Webhook/凭据
+
+## 招标爬虫功能说明
+
+`scripts/bidding_scraper.py` 是招标信息爬虫脚本，主要功能：
+
+### 数据源
+1. **中国政府采购网** - 使用搜索 API，通过 URL 参数限制地区为云南（displayZone=云南&zoneId=53）
+2. **中国采购与招标网** - POST 搜索，关键词"铁塔"
+3. **云南省公共资源交易中心** - 专用 API，网站本身全是云南省信息，只需匹配铁塔关键词
+4. **乙方宝（全国招标采购信息平台）** - 搜索全国数据，过滤云南地区
+
+### 过滤逻辑
+- **核心关键词**：铁塔、塔桅、通信铁塔等相关词汇
+- **地区过滤**：
+  - 云南省公共资源交易中心：网站本身全是云南信息，无需检查地区
+  - 中国政府采购网：通过 URL 参数限制地区，无需检查地区
+  - 其他网站：检查标题/描述/地区信息是否包含云南相关关键词
+- **正文匹配**：支持访问详情页提取正文中的地区信息（用于标题无地区信息的情况）
+
+### 运行方式
+```bash
+# 生成 RSS feed
+python scripts/bidding_scraper.py
+
+# 只打印结果，不写文件
+python scripts/bidding_scraper.py --dry-run
+
+# 指定输出文件
+python scripts/bidding_scraper.py --output output/bidding_feed.xml
+```
