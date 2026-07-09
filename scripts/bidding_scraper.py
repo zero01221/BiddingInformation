@@ -1044,6 +1044,273 @@ def fetch_yfbzb() -> List[BiddingItem]:
 
 
 # ─────────────────────────────────────────────────────────────
+# 云南招标网（bidcenter）爬取
+# ─────────────────────────────────────────────────────────────
+
+YUNNAN_BIDCENTER_URL = "https://yn.bidcenter.com.cn/zhaobiao/zbkeyw-19388-0-0-90.html"
+
+
+def fetch_yunnan_bidcenter() -> List[BiddingItem]:
+    """
+    爬取云南招标网（bidcenter）的铁塔招标信息。
+    该网站专门聚合云南地区的招标信息，数据丰富。
+    """
+    print(f"\n[云南招标网] 开始抓取")
+    soup = fetch_page(YUNNAN_BIDCENTER_URL, referer="https://yn.bidcenter.com.cn/")
+    if not soup:
+        return []
+
+    items = []
+    
+    # 查找所有招标条目（链接格式：diqucontent-xxx-1.html）
+    links = soup.select('a[href*="diqucontent-"]')
+    print(f"  找到 {len(links)} 个链接")
+    
+    for link in links:
+        title = link.get_text(strip=True)
+        href = link.get("href", "")
+        
+        if not title or not href:
+            continue
+        
+        # 补全 URL
+        if href.startswith("/"):
+            url = f"https://yn.bidcenter.com.cn{href}"
+        elif href.startswith("http"):
+            url = href
+        else:
+            url = f"https://yn.bidcenter.com.cn/{href}"
+        
+        # 提取日期信息（从父元素或相邻文本中）
+        date_raw = ""
+        parent = link.parent
+        if parent:
+            text = parent.get_text()
+            # 匹配日期格式：2026-07-09丨招标公告丨云南
+            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', text)
+            if date_match:
+                date_raw = date_match.group(1)
+        
+        # 关键词过滤：该网站本身全是云南省信息，只需匹配铁塔关键词
+        if not should_include(title, "", require_yunnan=False):
+            continue
+        
+        pub_date = parse_date(date_raw)
+        desc = f"来源：云南招标网 发布时间：{date_raw}"
+        
+        items.append(BiddingItem(
+            title=title,
+            url=url,
+            pub_date=pub_date,
+            pub_date_raw=date_raw or "未知日期",
+            source="云南招标网",
+            description=desc,
+        ))
+    
+    print(f"  过滤后保留 {len(items)} 条招标信息")
+    return items
+
+
+# ─────────────────────────────────────────────────────────────
+# 中国铁塔电子采购平台爬取
+# ─────────────────────────────────────────────────────────────
+
+TOWER_EBID_URL = "https://ebid.chinatowercom.cn/zgtt/gggs/003001/list.html"
+TOWER_EBID_API = "https://ebid.chinatowercom.cn/zgtt/gggs/003001/list.html"
+
+
+def fetch_tower_ebid() -> List[BiddingItem]:
+    """
+    爬取中国铁塔电子采购平台的招标信息。
+    这是铁塔公司官方采购平台，信息最权威、最全面。
+    """
+    print(f"\n[中国铁塔电子采购平台] 开始抓取")
+    
+    # 尝试通过 API 获取数据
+    headers = {
+        "User-Agent": random_ua(),
+        "Accept": "application/json, text/html, */*",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Referer": "https://ebid.chinatowercom.cn/",
+        "Origin": "https://ebid.chinatowercom.cn",
+    }
+    
+    items = []
+    
+    # 尝试多种可能的 API 端点
+    api_urls = [
+        "https://ebid.chinatowercom.cn/zgtt/gggs/003001/list.html",
+        "https://ebid.chinatowercom.cn/zgtt/portal/notice/list",
+    ]
+    
+    for api_url in api_urls:
+        try:
+            resp = requests.get(api_url, headers=headers, timeout=20, 
+                              proxies={"http": None, "https": None})
+            
+            # 尝试解析为 JSON
+            try:
+                data = resp.json()
+                rows = data.get("data", {}).get("list", []) or data.get("list", []) or []
+                
+                for row in rows:
+                    title = row.get("title", "").strip()
+                    if not title:
+                        continue
+                    
+                    # 检查是否包含云南相关信息
+                    area = row.get("area", "") or row.get("province", "")
+                    if "云南" not in area and "云" not in area:
+                        # 检查标题中是否有云南相关
+                        if not any(kw in title for kw in ["云南", "昆明", "大理", "丽江", "西双版纳", "曲靖", "玉溪", "保山", "昭通", "楚雄", "红河", "文山", "普洱", "临沧", "德宏", "怒江", "迪庆"]):
+                            continue
+                    
+                    # 关键词过滤
+                    if not should_include(title, area, require_yunnan=False):
+                        continue
+                    
+                    notice_id = row.get("id", "") or row.get("noticeId", "")
+                    url = f"https://ebid.chinatowercom.cn/zgtt/gggs/003001/{notice_id}.html" if notice_id else api_url
+                    
+                    date_raw = row.get("publishTime", "") or row.get("createTime", "")
+                    pub_date = parse_date(date_raw)
+                    
+                    desc = f"来源：中国铁塔电子采购平台 地区：{area} 发布时间：{date_raw}"
+                    
+                    items.append(BiddingItem(
+                        title=title,
+                        url=url,
+                        pub_date=pub_date,
+                        pub_date_raw=date_raw or "未知日期",
+                        source="中国铁塔电子采购平台",
+                        description=desc,
+                    ))
+                
+                if items:
+                    break
+                    
+            except (ValueError, KeyError):
+                # 不是 JSON，尝试解析 HTML
+                resp.encoding = 'utf-8'
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                
+                # 查找公告列表
+                links = soup.select('a[href*="/zgtt/gggs/"]')
+                for link in links:
+                    title = link.get_text(strip=True)
+                    href = link.get("href", "")
+                    
+                    if not title or len(title) < 10:
+                        continue
+                    
+                    # 检查是否包含云南相关信息
+                    if not any(kw in title for kw in ["云南", "昆明", "大理", "丽江", "西双版纳", "曲靖", "玉溪", "保山", "昭通", "楚雄", "红河", "文山", "普洱", "临沧", "德宏", "怒江", "迪庆"]):
+                        continue
+                    
+                    # 关键词过滤
+                    if not should_include(title, "", require_yunnan=False):
+                        continue
+                    
+                    if href.startswith("/"):
+                        url = f"https://ebid.chinatowercom.cn{href}"
+                    elif href.startswith("http"):
+                        url = href
+                    else:
+                        url = f"https://ebid.chinatowercom.cn/{href}"
+                    
+                    pub_date = parse_date("")
+                    desc = f"来源：中国铁塔电子采购平台"
+                    
+                    items.append(BiddingItem(
+                        title=title,
+                        url=url,
+                        pub_date=pub_date,
+                        pub_date_raw="未知日期",
+                        source="中国铁塔电子采购平台",
+                        description=desc,
+                    ))
+                
+                if items:
+                    break
+                    
+        except Exception as e:
+            print(f"  [警告] {api_url} 请求失败: {e}")
+            continue
+    
+    print(f"  过滤后保留 {len(items)} 条招标信息")
+    return items
+
+
+# ─────────────────────────────────────────────────────────────
+# 中国电力招标采购网爬取
+# ─────────────────────────────────────────────────────────────
+
+DLZTB_URL = "http://m.dlztb.com"
+
+
+def fetch_dlztb() -> List[BiddingItem]:
+    """
+    爬取中国电力招标采购网的铁塔相关招标信息。
+    """
+    print(f"\n[中国电力招标采购网] 开始抓取")
+    
+    # 搜索铁塔关键词 - 使用移动端搜索接口
+    search_url = f"{DLZTB_URL}/search/index.html"
+    params = {"keyword": "铁塔 云南"}
+    
+    soup = fetch_page(search_url, params=params, referer=DLZTB_URL)
+    if not soup:
+        # 尝试直接访问招标信息列表页
+        list_url = f"{DLZTB_URL}/zbxx/"
+        soup = fetch_page(list_url, referer=DLZTB_URL)
+        if not soup:
+            return []
+    
+    items = []
+    
+    # 查找搜索结果列表
+    links = soup.select('a[href*="/view/"], a[href*="/zbxx/"]')
+    print(f"  找到 {len(links)} 个链接")
+    
+    for link in links:
+        title = link.get_text(strip=True)
+        href = link.get("href", "")
+        
+        if not title or not href or len(title) < 10:
+            continue
+        
+        # 检查是否包含云南相关信息
+        if not any(kw in title for kw in ["云南", "昆明", "大理", "丽江", "西双版纳", "曲靖", "玉溪", "保山", "昭通", "楚雄", "红河", "文山", "普洱", "临沧", "德宏", "怒江", "迪庆"]):
+            continue
+        
+        # 关键词过滤
+        if not should_include(title, "", require_yunnan=False):
+            continue
+        
+        if href.startswith("/"):
+            url = f"http://m.dlztb.com{href}"
+        elif href.startswith("http"):
+            url = href
+        else:
+            url = f"http://m.dlztb.com/{href}"
+        
+        pub_date = parse_date("")
+        desc = f"来源：中国电力招标采购网"
+        
+        items.append(BiddingItem(
+            title=title,
+            url=url,
+            pub_date=pub_date,
+            pub_date_raw="未知日期",
+            source="中国电力招标采购网",
+            description=desc,
+        ))
+    
+    print(f"  过滤后保留 {len(items)} 条招标信息")
+    return items
+
+
+# ─────────────────────────────────────────────────────────────
 # 主流程
 # ─────────────────────────────────────────────────────────────
 
@@ -1095,6 +1362,36 @@ def main():
     except Exception as e:
         print(f"  [错误] 乙方宝爬取异常: {e}")
 
+    # 5. 爬取云南招标网（bidcenter）
+    wait = args.interval + random.randint(0, 10)
+    print(f"\n等待 {wait} 秒后继续...")
+    time.sleep(wait)
+    try:
+        bidcenter_items = fetch_yunnan_bidcenter()
+        all_items.extend(bidcenter_items)
+    except Exception as e:
+        print(f"  [错误] 云南招标网爬取异常: {e}")
+
+    # 6. 爬取中国铁塔电子采购平台
+    wait = args.interval + random.randint(0, 10)
+    print(f"\n等待 {wait} 秒后继续...")
+    time.sleep(wait)
+    try:
+        tower_items = fetch_tower_ebid()
+        all_items.extend(tower_items)
+    except Exception as e:
+        print(f"  [错误] 中国铁塔电子采购平台爬取异常: {e}")
+
+    # 7. 爬取中国电力招标采购网
+    wait = args.interval + random.randint(0, 10)
+    print(f"\n等待 {wait} 秒后继续...")
+    time.sleep(wait)
+    try:
+        dlztb_items = fetch_dlztb()
+        all_items.extend(dlztb_items)
+    except Exception as e:
+        print(f"  [错误] 中国电力招标采购网爬取异常: {e}")
+
     # 全局去重（按 URL）
     seen_urls = set()
     unique_items = []
@@ -1120,7 +1417,7 @@ def main():
     for item in all_items:
         items_by_date[item.pub_date_raw].append(item)
 
-    # 打印摘要（按日期分组）
+    # 打印摘要（按日期分组，输出招标名称和网址）
     print(f"\n{'='*50}")
     print(f"共收集到 {len(all_items)} 条招标信息")
     print(f"{'='*50}")
@@ -1128,27 +1425,12 @@ def main():
     for date, items in sorted(items_by_date.items(), reverse=True):
         print(f"\n【{date}】共 {len(items)} 条")
         for item in items:
-            print(f"  [{item.source}] {item.title[:60]}")
+            print(f"  {item.title[:70]}")
+            print(f"    {item.url}")
 
     rss_content = build_rss(all_items)
 
     if args.dry_run:
-        print(f"\n{'='*50}")
-        print("详细信息：")
-        print(f"{'='*50}")
-        item_num = 0
-        for date, items in sorted(items_by_date.items(), reverse=True):
-            print(f"\n{'─'*50}")
-            print(f"【{date}】")
-            print(f"{'─'*50}")
-            for item in items:
-                item_num += 1
-                print(f"\n--- [{item_num}] ---")
-                print(f"标题: {item.title}")
-                print(f"来源: {item.source}")
-                print(f"链接: {item.url}")
-                if item.description:
-                    print(f"摘要: {item.description[:300]}")
         return
 
     output_path = Path(args.output)
