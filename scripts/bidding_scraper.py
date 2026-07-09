@@ -1011,20 +1011,22 @@ def fetch_yfbzb_search(keyword: str, province_id: str = "", page_no: int = 1, pa
 
 
 def fetch_yfbzb() -> List[BiddingItem]:
-    """爬取乙方宝，使用多个关键词搜索"""
+    """爬取乙方宝，使用关键词搜索
+    
+    搜索策略：
+    - 使用"铁塔"搜索：覆盖大部分铁塔相关项目
+    - 使用"塔桅"搜索：覆盖广播电视塔桅等项目（如"兰坪县广播电视无线发射台塔桅检修"）
+    - 过滤时通过 CORE_KEYWORDS 和 REGION_KEYWORDS 确保结果相关
+    """
     all_items: List[BiddingItem] = []
-    # 搜索关键词：铁塔相关
-    keywords = [
-        "铁塔",
-        "塔桅",
-    ]
+    # 搜索关键词：铁塔 + 塔桅（覆盖更多场景）
+    keywords = ["铁塔", "塔桅"]
 
     for i, kw in enumerate(keywords):
         if i > 0:
             time.sleep(random.randint(3, 6))
         try:
             # 不限制省份ID，搜索全国数据，然后在过滤时检查地区
-            # 因为 provinceId 可能不准确，而且我们需要检查正文中的地区信息
             items = fetch_yfbzb_search(kw, province_id="", page_no=1)
             all_items.extend(items)
         except Exception as e:
