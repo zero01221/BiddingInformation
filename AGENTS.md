@@ -31,7 +31,21 @@
 │   ├── timeline.yaml     # 时间线配置
 │   └── ai_filter/        # AI 过滤配置
 ├── scripts/              # 脚本
-│   ├── bidding_scraper.py  # 招标抓取
+│   ├── bidding_scraper/  # 招标爬虫模块（v2.0 重构）
+│   │   ├── main.py       # 主入口
+│   │   ├── config.py     # 配置管理
+│   │   ├── models.py     # 数据模型
+│   │   ├── database.py   # SQLite 数据库
+│   │   ├── base_crawler.py # 爬虫基类
+│   │   ├── filters.py    # 过滤器
+│   │   ├── output.py     # 输出格式化
+│   │   ├── utils.py      # 工具函数
+│   │   ├── logger.py     # 日志管理
+│   │   └── crawlers/     # 各数据源爬虫
+│   │       ├── yfbzb.py  # 乙方宝
+│   │       ├── ccgp.py   # 中国政府采购网
+│   │       ├── ynggzy.py # 云南省公共资源交易中心
+│   │       └── chinabidding.py # 中国采购与招标网
 │   ├── coze-deploy-setup.sh # 部署依赖安装
 │   └── coze-deploy-run.sh   # 部署服务启动（端口 5000）
 ├── output/               # 输出目录
@@ -47,7 +61,9 @@
 - **CLI 入口**: `python -m trendradar` 或 `trendradar`（安装后）
 - **MCP 服务**: `python -m mcp_server.server` 或 `trendradar-mcp`
 - **HTTP 模式**: `bash start-http.sh`（端口 3333）
-- **招标抓取脚本**: `scripts/bidding_scraper.py`
+- **招标抓取脚本**: `python -m scripts.bidding_scraper` 或 `python -m scripts.bidding_scraper --dry-run`
+- **招标爬虫配置**: `config/bidding_scraper.yaml`
+- **招标历史数据库**: `output/bidding_history.db`
 - **主配置**: `config/config.yaml`
 
 ## 运行与预览

@@ -1,0 +1,142 @@
+# 招标信息爬虫配置文件
+
+# 过滤关键词配置
+keywords:
+  # 核心关键词 - 标题或描述必须包含其中至少一个
+  core:
+    - 铁塔
+    - 钢管塔
+    - 角钢塔
+    - 格构式铁塔
+    - 通信铁塔
+    - 通信塔
+    - 基站塔
+    - 塔桅
+    - 桅杆
+    - 拉线塔
+    - 单管塔
+    - 景观塔
+    - 仿生树
+    - 铁塔维护
+    - 铁塔检修
+    - 塔桅维护
+    - 塔桅检修
+    - 铁塔检测
+    - 塔桅检测
+    - 中国铁塔
+  
+  # 云南地区关键词
+  yunnan:
+    - 云南
+    - 昆明
+    - 曲靖
+    - 玉溪
+    - 保山
+    - 昭通
+    - 丽江
+    - 普洱
+    - 临沧
+    - 楚雄
+    - 红河
+    - 文山
+    - 西双版纳
+    - 大理
+    - 德宏
+    - 怒江
+    - 迪庆
+
+# 行业关键词（用于地区+行业组合匹配）
+industry:
+  - 通信
+  - 移动
+  - 联通
+  - 电信
+  - 铁塔
+  - 5G
+  - 4G
+  - 基站
+  - 信号覆盖
+  - 无线通信
+
+# 数据源配置
+sources:
+  yfbzb:
+    enabled: true
+    name: 乙方宝
+    base_url: https://www.yfbzb.com
+    search_url: https://www.yfbzb.com/search/invitedBidSearch
+    keywords:
+      - 铁塔
+      - 塔桅
+    max_pages: 2
+    # 全国数据，过滤云南地区
+    region_filter: yunnan
+  
+  ccgp:
+    enabled: true
+    name: 中国政府采购网
+    search_url: http://search.ccgp.gov.cn/bxsearch
+    display_zone: 云南
+    zone_id: "53"
+    keywords:
+      - 铁塔
+      - 中国铁塔
+      - 通信铁塔
+      - 塔桅
+  
+  ynggzy:
+    enabled: true
+    name: 云南省公共资源交易中心
+    api_url: https://ggzy.yn.gov.cn/ynggfwpt-home-api/jyzyCenter/jyInfo/gcjs/getZbggList
+    # 网站本身全是云南省信息，无需检查地区
+    region_filter: none
+  
+  chinabidding:
+    enabled: true
+    name: 中国采购与招标网
+    search_url: https://www.chinabidding.com/search/proj.htm
+    keyword: 铁塔
+    max_pages: 1
+
+# 请求配置
+request:
+  timeout: 30
+  retry_attempts: 3
+  retry_delay: 2
+  delay_between_requests: 5
+  delay_between_sources: 15
+  user_agents:
+    - Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36
+    - Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36
+    - Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0
+
+# 数据库配置
+database:
+  path: output/bidding_history.db
+  # 保留历史记录的天数
+  retention_days: 90
+
+# 输出配置
+output:
+  rss_file: output/bidding_feed.xml
+  rss_title: 云南铁塔招标信息
+  rss_description: 云南地区铁塔相关招标信息聚合
+  rss_link: https://github.com/zero01221/IronTowerInformation
+  max_items: 100
+
+# 日志配置
+logging:
+  level: INFO
+  file: output/bidding_scraper.log
+  # 日志文件最大大小（MB）
+  max_size: 10
+  # 保留的日志文件数量
+  backup_count: 5
+
+# 健康检查配置
+health_check:
+  enabled: true
+  # 连续失败次数后标记为不健康
+  failure_threshold: 3
+  # 检查间隔（秒）
+  check_interval: 3600
