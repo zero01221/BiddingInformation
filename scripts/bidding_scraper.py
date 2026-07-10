@@ -978,7 +978,7 @@ def fetch_yfbzb_search(keyword: str, province_id: str = "", page_no: int = 1, pa
                 continue
 
         href = a_tag.get("href", "")
-        url = normalize_url(href, "https://www.yfbzb.com")
+        detail_url = normalize_url(href, "https://www.yfbzb.com")
 
         # 提取日期（第4列）
         date_td = row.select_one("td:nth-child(4)")
@@ -994,12 +994,31 @@ def fetch_yfbzb_search(keyword: str, province_id: str = "", page_no: int = 1, pa
 
         pub_date = parse_date(date_raw)
 
-        # 构建描述
-        desc = f"来源：乙方宝 地区：{area} 发布时间：{date_raw or '未知'}"
+        # 尝试从详情页提取千里马链接（原始发布平台）
+        original_url = ""
+        try:
+            detail_soup = fetch_page(detail_url, referer="https://www.yfbzb.com/")
+            if detail_soup:
+                # 查找千里马链接
+                for link in detail_soup.select("a"):
+                    link_href = link.get("href", "")
+                    if "qianlima.com" in link_href and "infoDetail" in link_href:
+                        original_url = link_href
+                        break
+        except Exception:
+            pass
+
+        # 构建描述和最终URL
+        if original_url:
+            desc = f"来源：乙方宝 地区：{area} 发布时间：{date_raw or '未知'}\n原始链接：{original_url}"
+            final_url = original_url
+        else:
+            desc = f"来源：乙方宝 地区：{area} 发布时间：{date_raw or '未知'}"
+            final_url = detail_url
 
         items.append(BiddingItem(
             title=title,
-            url=url,
+            url=final_url,
             pub_date=pub_date,
             pub_date_raw=date_raw or "未知日期",
             source="乙方宝",
