@@ -135,8 +135,12 @@ class YfbzbCrawler(BaseCrawler):
             date_str = date_cell.get_text(strip=True) if date_cell else ""
             date = extract_date(date_str) or ""
             
-            # 获取详情页的原始链接
-            original_url = self._get_original_url(href) if href else ""
+            # 获取详情页的原始链接（可选，默认关闭以避免触发反爬虫）
+            fetch_detail = self.config.get("fetch_detail", False)
+            if fetch_detail and href:
+                original_url = self._get_original_url(href)
+            else:
+                original_url = ""
             
             return BidItem(
                 title=title,

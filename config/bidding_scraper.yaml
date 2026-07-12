@@ -71,6 +71,8 @@ sources:
     max_pages: 2
     # 全国数据，过滤云南地区
     region_filter: yunnan
+    # 是否抓取详情页获取原始链接（开启会增加请求数量，可能触发反爬虫）
+    fetch_detail: false
   
   ccgp:
     enabled: true
@@ -103,8 +105,9 @@ request:
   timeout: 30
   retry_attempts: 3
   retry_delay: 2
-  delay_between_requests: 5
-  delay_between_sources: 15
+  # 请求间隔（秒）- 增加间隔以减少触发反爬虫
+  delay_between_requests: 8
+  delay_between_sources: 20
   user_agents:
     - Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36
     - Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36
