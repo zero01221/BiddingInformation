@@ -94,7 +94,8 @@ sources:
     region_filter: none
   
   chinabidding:
-    enabled: true
+    # 暂时禁用 - 使用Cloudflare反爬虫保护(521错误)，需要selenium绕过
+    enabled: false
     name: 中国采购与招标网
     search_url: https://www.chinabidding.com/search/proj.htm
     keyword: 铁塔

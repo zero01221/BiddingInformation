@@ -61,7 +61,23 @@ class YnggzyCrawler(BaseCrawler):
         try:
             resp = requests.post(api_url, json=payload, headers=headers, timeout=self.timeout)
             data = resp.json()
-            rows = data.get("value", {}).get("list", [])
+            
+            # 检查返回数据类型
+            if isinstance(data, str):
+                logger.warning(f"[{self.display_name}] {category} 返回字符串: {data[:100]}")
+                return []
+            
+            if not isinstance(data, dict):
+                logger.warning(f"[{self.display_name}] {category} 返回非字典类型: {type(data)}")
+                return []
+            
+            # 安全获取列表数据
+            value = data.get("value", {})
+            if isinstance(value, str):
+                logger.warning(f"[{self.display_name}] {category} value 为字符串: {value[:100]}")
+                return []
+            
+            rows = value.get("list", []) if isinstance(value, dict) else []
             
             items = []
             for row in rows:
