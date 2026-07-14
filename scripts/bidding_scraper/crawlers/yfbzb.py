@@ -2,6 +2,7 @@
 """乙方宝爬虫"""
 
 import re
+from datetime import datetime, timedelta
 from typing import List, Optional
 from urllib.parse import urlencode
 
@@ -25,6 +26,8 @@ class YfbzbCrawler(BaseCrawler):
         self.search_url = self.config.get("search_url", "https://www.yfbzb.com/search/invitedBidSearch")
         self.keywords = self.config.get("keywords", ["铁塔", "塔桅"])
         self.max_pages = self.config.get("max_pages", 2)
+        # 日期过滤：只保留最近N天内的项目（默认15天）
+        self.max_age_days = self.config.get("max_age_days", 15)
     
     def fetch(self) -> List[BidItem]:
         """抓取招标信息"""
@@ -47,7 +50,46 @@ class YfbzbCrawler(BaseCrawler):
         # 过滤云南地区
         filtered_items = self.filter_by_region(unique_items)
         
+        # 过滤日期：只保留最近N天内的项目
+        if self.max_age_days > 0:
+            filtered_items = self._filter_by_date(filtered_items)
+        
         return filtered_items
+    
+    def _filter_by_date(self, items: List[BidItem]) -> List[BidItem]:
+        """按日期过滤，只保留最近N天内的项目"""
+        if not items:
+            return items
+        
+        cutoff_date = datetime.now() - timedelta(days=self.max_age_days)
+        filtered = []
+        
+        for item in items:
+            if not item.date:
+                # 没有日期的项目保留
+                filtered.append(item)
+                continue
+            
+            try:
+                # 解析日期（支持多种格式）
+                item_date = None
+                for fmt in ["%Y-%m-%d", "%Y/%m/%d", "%Y年%m月%d日", "%m月%d日"]:
+                    try:
+                        item_date = datetime.strptime(item.date, fmt)
+                        break
+                    except ValueError:
+                        continue
+                
+                if item_date and item_date >= cutoff_date:
+                    filtered.append(item)
+                else:
+                    logger.debug(f"[{self.display_name}] 过滤过期项目: {item.title[:40]}... ({item.date})")
+            except Exception as e:
+                logger.debug(f"[{self.display_name}] 日期解析失败: {item.date}, 保留项目")
+                filtered.append(item)
+        
+        logger.info(f"[{self.display_name}] 日期过滤：{len(items)} -> {len(filtered)} 条（保留{self.max_age_days}天内）")
+        return filtered
     
     def _search_keyword(self, keyword: str) -> List[BidItem]:
         """搜索单个关键词"""

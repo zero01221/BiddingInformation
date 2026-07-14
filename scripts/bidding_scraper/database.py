@@ -148,6 +148,35 @@ class Database:
             
             return items
     
+    def get_today_items(self) -> List[dict]:
+        """获取今日新增的招标信息（用于通知）"""
+        today = datetime.now().strftime("%Y-%m-%d")
+        
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT item_id, title, url, original_url, date, source, description
+                FROM bid_items
+                WHERE date = ?
+                ORDER BY created_at DESC
+                """,
+                (today,)
+            )
+            
+            items = []
+            for row in cursor.fetchall():
+                items.append({
+                    'item_id': row[0],
+                    'title': row[1],
+                    'url': row[2],
+                    'original_url': row[3] or '',
+                    'date': row[4],
+                    'source': row[5],
+                    'description': row[6] or '',
+                })
+            
+            return items
+    
     def get_all_items(self, limit: int = 100) -> List[BidItem]:
         """获取所有招标信息（按日期降序）"""
         with self._get_connection() as conn:

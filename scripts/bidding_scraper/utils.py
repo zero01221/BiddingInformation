@@ -77,10 +77,13 @@ def fetch_page(
     headers = make_headers(referer)
     
     try:
+        # 禁用代理，避免代理连接问题
+        proxies = {'http': None, 'https': None}
+        
         if method.upper() == "POST":
-            resp = requests.post(url, data=data, headers=headers, timeout=timeout)
+            resp = requests.post(url, data=data, headers=headers, timeout=timeout, proxies=proxies)
         else:
-            resp = requests.get(url, params=params, headers=headers, timeout=timeout)
+            resp = requests.get(url, params=params, headers=headers, timeout=timeout, proxies=proxies)
         
         resp.raise_for_status()
         
