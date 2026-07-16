@@ -69,6 +69,7 @@ class CebpubserviceCrawler(BaseCrawler):
                 data=data,
                 proxies=self.proxies,
                 timeout=15,
+                raw=True,
             )
 
             if not html:

@@ -60,6 +60,7 @@ class TowerComCnCrawler(BaseCrawler):
                 headers=self._get_headers(),
                 proxies=self.proxies,
                 timeout=15,
+                raw=True,
             )
 
             if not html:

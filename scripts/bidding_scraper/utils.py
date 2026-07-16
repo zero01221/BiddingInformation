@@ -52,48 +52,60 @@ def fetch_page(
     params: Optional[dict] = None,
     data: Optional[dict] = None,
     method: str = "GET",
+    headers: Optional[dict] = None,
     referer: str = "",
     timeout: int = 30,
     encoding: Optional[str] = None,
-) -> Optional[BeautifulSoup]:
+    proxies: Optional[dict] = None,
+    raw: bool = False,
+):
     """
     获取页面内容，支持自动重试
-    
+
     Args:
         url: 请求URL
         params: GET参数
         data: POST数据
         method: 请求方法（GET/POST）
+        headers: 自定义请求头，会与默认请求头合并
         referer: Referer头
         timeout: 超时时间
         encoding: 强制编码
-    
+        proxies: 代理配置，None或空字典则禁用代理
+        raw: 是否返回原始文本（True返回str，False返回BeautifulSoup）
+
     Returns:
-        BeautifulSoup对象，失败返回None
+        BeautifulSoup对象或原始文本字符串，失败返回None
     """
     config = Config.get_instance()
     timeout = timeout or config.get_int("request.timeout", 30)
-    
-    headers = make_headers(referer)
-    
+
+    # 构建请求头：默认头 + 自定义头（自定义头优先）
+    req_headers = make_headers(referer)
+    if headers:
+        req_headers.update(headers)
+
+    # 处理代理：None或空字典则禁用代理
+    req_proxies = proxies if proxies else {'http': None, 'https': None}
+
     try:
-        # 禁用代理，避免代理连接问题
-        proxies = {'http': None, 'https': None}
-        
         if method.upper() == "POST":
-            resp = requests.post(url, data=data, headers=headers, timeout=timeout, proxies=proxies)
+            resp = requests.post(url, data=data, headers=req_headers, timeout=timeout, proxies=req_proxies)
         else:
-            resp = requests.get(url, params=params, headers=headers, timeout=timeout, proxies=proxies)
-        
+            resp = requests.get(url, params=params, headers=req_headers, timeout=timeout, proxies=req_proxies)
+
         resp.raise_for_status()
-        
+
         if encoding:
             resp.encoding = encoding
         elif resp.apparent_encoding:
             resp.encoding = resp.apparent_encoding
-        
+
+        if raw:
+            return resp.text
+
         return BeautifulSoup(resp.text, "html.parser")
-    
+
     except requests.exceptions.Timeout:
         logger.warning(f"请求超时: {url}")
         raise

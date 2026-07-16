@@ -69,6 +69,7 @@ class MiitTxzbqyCrawler(BaseCrawler):
                 data=json.dumps(payload),
                 proxies=self.proxies,
                 timeout=15,
+                raw=True,
             )
 
             if not html:
