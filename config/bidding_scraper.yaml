@@ -108,96 +108,19 @@ filter:
 # 3. 中国铁塔电子采购平台 ebid.chinatowercom.cn
 # 4. 通信工程建设项目招标投标管理信息平台 txzbqy.miit.gov.cn
 # 5. 中国政府采购网 www.ccgp.gov.cn
-# 6. 云南省政府采购网 http://www.ccgpyunnan.gov.cn/page/procurement/procurementList.html
+# 6. 云南省政府采购网 www.ccgp-yunnan.gov.cn
 
 sources:
-  # 已禁用旧爬虫
-  yfbzb:
-    enabled: false
-    name: 乙方宝（已禁用）
-  
-  chinabidding:
-    enabled: false
-    name: 中国采购与招标网（已禁用）
-  
-  ynggzy:
-    enabled: false
-    name: 云南省公共资源交易中心（已禁用）
-  
-  # 新爬虫配置
-  # 中国铁塔电子采购平台（官方平台，信息最权威）
-  # 网址: https://ebid.chinatowercom.cn
-  # 说明: 铁塔公司官方采购平台，所有铁塔项目都会在此发布
-  chinatower_ebid:
-    enabled: true
-    name: 中国铁塔电子采购平台
-    base_url: https://ebid.chinatowercom.cn
-    # API接口需要进一步分析，暂时使用页面抓取
-    list_url: https://ebid.chinatowercom.cn/zgtt/gggs/003001/list.html
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 广播电视
-      - 发射台
-      - 发射塔
-    max_pages: 3
-  
-  # 中国铁塔在线商务平台（主要，重点）
-  # 网址: https://www.tower.com.cn
-  # 说明: 铁塔公司官方商务平台，与电子采购平台同步发布招标信息
-  chinatower_biz:
-    enabled: true
-    name: 中国铁塔在线商务平台
-    base_url: https://www.tower.com.cn
-    # 需要进一步分析API接口
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 广播电视
-      - 发射台
-      - 发射塔
-    max_pages: 3
-  
-  # 中国招标投标公共服务平台
-  # 网址: http://www.cebpubservice.com
-  # 说明: 国家级招标信息发布平台，信息权威可靠
-  cebpubservice:
-    enabled: true
-    name: 中国招标投标公共服务平台
-    base_url: http://www.cebpubservice.com
-    search_url: http://bulletin.cebpubservice.com
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 广播电视
-      - 发射台
-      - 发射塔
-    max_pages: 3
-    region_filter: yunnan
-  
-  # 通信工程建设项目招标投标管理信息平台
-  # 网址: https://txzbqy.miit.gov.cn
-  # 说明: 工信部主管的通信工程招标平台
-  miit_txzb:
-    enabled: true
-    name: 通信工程建设项目招标投标管理信息平台
-    base_url: https://txzbqy.miit.gov.cn
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 广播电视
-      - 发射台
-      - 发射塔
-      - 通信塔
-    max_pages: 3
-    region_filter: yunnan
-  
+  # =========================================================================
   # 中国政府采购网
-  # 网址: http://www.ccgp.gov.cn
+  # 网址: https://www.ccgp.gov.cn
+  # 搜索API: search.ccgp.gov.cn/bxsearch
+  # 注意: 该网站有严格的反爬机制，已添加反爬检测和长延迟处理
+  # =========================================================================
   ccgp:
     enabled: true
     name: 中国政府采购网
-    search_url: http://search.ccgp.gov.cn/bxsearch
+    search_url: https://search.ccgp.gov.cn/bxsearch
     display_zone: 云南
     zone_id: "53"
     keywords:
@@ -207,52 +130,20 @@ sources:
       - 塔桅
       - 广播电视
       - 发射塔
-  
-  ccgp_yunnan:
-    enabled: true
-    name: 云南省政府采购网
-    base_url: http://www.ccgpyunnan.gov.cn
-    list_url: http://www.ccgpyunnan.gov.cn/page/procurement/procurementList.html
-    max_pages: 3
-  
-  cebpubservice:
-    enabled: true
-    name: 中国招标投标公共服务平台
-    base_url: https://www.cebpubservice.com
-    search_url: https://www.cebpubservice.com/ctpsp_iiss/searchbusinesstypebeforedooraction/getSearch.do
-    max_pages: 3
-  
-  chinatowercom:
-    enabled: true
-    name: 中国铁塔电子采购平台
-    base_url: https://ebid.chinatowercom.cn
-    api_url: https://ebid.chinatowercom.cn/tcpms/tenderee/tendererBiddingInfoController/getTendererBiddingInfoList
-    max_pages: 3
-  
-  tower_com_cn:
-    enabled: true
-    name: 中国铁塔在线商务平台
-    base_url: https://www.tower.com.cn
-    search_url: https://www.tower.com.cn/bidding/biddingList
-    max_pages: 3
-  
-  miit_txzbqy:
-    enabled: true
-    name: 通信工程招标投标平台
-    base_url: https://txzbqy.miit.gov.cn
-    search_url: https://txzbqy.miit.gov.cn/api/bidding/search
-    max_pages: 3
-      - 发射台
-      - 发射塔
-  
+    # CCGP反爬参数：关键词间延迟15-30秒
+    min_delay: 15
+    max_delay: 30
+
+  # =========================================================================
   # 云南省政府采购网
-  # 网址: http://www.ccgpyunnan.gov.cn/page/procurement/procurementList.html
-  # 说明: 云南省政府采购信息官方发布平台
+  # 网址: http://www.ccgp-yunnan.gov.cn
+  # 注意: 原域名 www.ccgpyunnan.gov.cn 已失效，正确域名带中划线
+  # =========================================================================
   ccgp_yunnan:
     enabled: true
     name: 云南省政府采购网
-    base_url: http://www.ccgpyunnan.gov.cn
-    list_url: http://www.ccgpyunnan.gov.cn/page/procurement/procurementList.html
+    base_url: http://www.ccgp-yunnan.gov.cn
+    list_url: http://www.ccgp-yunnan.gov.cn/page/procurement/procurementList.html
     keywords:
       - 铁塔
       - 塔桅
@@ -260,10 +151,91 @@ sources:
       - 发射台
       - 发射塔
     max_pages: 3
-  
-  # 乙方宝（聚合平台，数据丰富）
-  yfbzb:
+
+  # =========================================================================
+  # 中国招标投标公共服务平台
+  # 网址: http://www.cebpubservice.com
+  # 注意: HTTPS返回502，必须使用HTTP；搜索API在 www 域名而非 bulletin
+  # =========================================================================
+  cebpubservice:
     enabled: true
+    name: 中国招标投标公共服务平台
+    # 注意：必须使用HTTP（HTTPS会502）
+    base_url: http://www.cebpubservice.com
+    search_url: http://www.cebpubservice.com/ctpsp_iiss/searchbusinesstypebeforedooraction/getSearch.do
+    keywords:
+      - 铁塔
+      - 塔桅
+      - 广播电视
+      - 发射台
+      - 发射塔
+    max_pages: 3
+    region_filter: yunnan
+
+  # =========================================================================
+  # 中国铁塔电子采购平台
+  # 网址: https://ebid.chinatowercom.cn
+  # 正确API: /inteligentsearch/rest/esinteligentsearch/getFullTextDataNew
+  # 注意: ES检索服务有时后端故障，爬虫会优雅降级
+  # =========================================================================
+  chinatowercom:
+    enabled: true
+    name: 中国铁塔电子采购平台
+    base_url: https://ebid.chinatowercom.cn
+    api_url: https://ebid.chinatowercom.cn/inteligentsearch/rest/esinteligentsearch/getFullTextDataNew
+    keywords:
+      - 铁塔
+      - 塔桅
+      - 广播电视
+      - 发射台
+      - 发射塔
+    max_pages: 3
+
+  # =========================================================================
+  # 中国铁塔在线商务平台
+  # 网址: https://www.tower.com.cn
+  # 注意: 当前从本网络不可达（连接超时），会自动跳过
+  # =========================================================================
+  tower_com_cn:
+    enabled: false
+    name: 中国铁塔在线商务平台
+    base_url: https://www.tower.com.cn
+    search_url: https://www.tower.com.cn/bidding/biddingList
+    keywords:
+      - 铁塔
+      - 塔桅
+      - 广播电视
+      - 发射台
+      - 发射塔
+    max_pages: 3
+
+  # =========================================================================
+  # 通信工程招标投标平台
+  # 网址: https://txzbqy.miit.gov.cn
+  # 注意: Vue.js SPA，API base为 /zbtb（来自static/config.js）
+  # 公开REST API端点待逆向，当前需要配置 search_url
+  # =========================================================================
+  miit_txzbqy:
+    enabled: false
+    name: 通信工程招标投标平台
+    base_url: https://txzbqy.miit.gov.cn
+    # 已知API base: https://txzbqy.miit.gov.cn/zbtb
+    # search_url 待配置正确的REST端点
+    keywords:
+      - 铁塔
+      - 塔桅
+      - 通信塔
+      - 广播电视
+      - 发射台
+      - 发射塔
+    max_pages: 3
+    region_filter: yunnan
+
+  # =========================================================================
+  # 乙方宝（聚合平台，数据丰富）
+  # =========================================================================
+  yfbzb:
+    enabled: false
     name: 乙方宝
     base_url: https://www.yfbzb.com
     search_url: https://www.yfbzb.com/search/invitedBidSearch
@@ -276,14 +248,21 @@ sources:
     max_pages: 2
     region_filter: yunnan
     fetch_detail: false
-  
+
+  # =========================================================================
   # 云南省公共资源交易中心
   # 网站本身全是云南省信息，无需检查地区
+  # =========================================================================
   ynggzy:
     enabled: true
     name: 云南省公共资源交易中心
     api_url: https://ggzy.yn.gov.cn/ynggfwpt-home-api/jyzyCenter/jyInfo/gcjs/getZbggList
     region_filter: none
+
+  # 以下为已废弃或备用的数据源配置
+  chinabidding:
+    enabled: false
+    name: 中国采购与招标网（已禁用）
 
 # 请求配置
 request:
@@ -325,9 +304,9 @@ notification:
   # 6. 复制 Webhook 地址，粘贴到下方
   # ---------------------------------------------------------------------------
   feishu:
-    enabled: false
+    enabled: true
     # 飞书 Webhook URL - 请替换为你自己的 Webhook 地址
-    webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-id"
+    webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/0333ed93-064d-4eb1-84d1-5ee465678ddf"
   
   # ---------------------------------------------------------------------------
   # 企业微信通知

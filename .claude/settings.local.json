@@ -5,7 +5,21 @@
       "Read(//tmp/**)",
       "Bash(python scripts/inspect_ccgp.py)",
       "Bash(python scripts/test_ccgp_enc.py)",
-      "Bash(python scripts/bidding_scraper.py --dry-run)"
+      "Bash(python scripts/bidding_scraper.py --dry-run)",
+      "WebFetch(domain:txzbqy.miit.gov.cn)",
+      "WebFetch(domain:ebid.chinatowercom.cn)",
+      "WebFetch(domain:www.cebpubservice.com)",
+      "WebFetch(domain:search.ccgp.gov.cn)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" --connect-timeout 10 \"http://search.ccgp.gov.cn/bxsearch\")",
+      "Bash(curl -s --connect-timeout 15 --max-time 30 \"http://search.ccgp.gov.cn/bxsearch?searchtype=1&page_index=1&bidSort=0&buyerName=&projectId=&pinMu=0&bidType=1&dbselect=bidx&kw=%E9%93%81%E5%A1%94&timeType=2&displayZone=%E4%BA%91%E5%8D%97&zoneId=53&pppStatus=0&agentName=\")",
+      "Bash(curl -s --connect-timeout 15 --max-time 30 \"https://www.cebpubservice.com/ctpsp_iiss/searchbusinesstypebeforedooraction/getSearch.do\" -X POST -d \"keyword=铁塔&pageNum=1&pageSize=20&businesstype=1\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"X-Requested-With: XMLHttpRequest\")",
+      "Bash(curl -s --connect-timeout 15 --max-time 30 \"https://ebid.chinatowercom.cn/tcpms/tenderee/tendererBiddingInfoController/getTendererBiddingInfoList\" -X POST -d \"pageNo=1&pageSize=20&keyword=铁塔&tenderType=1\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Referer: https://ebid.chinatowercom.cn/\")",
+      "Bash(curl -s --connect-timeout 15 --max-time 30 \"https://txzbqy.miit.gov.cn/api/bidding/search\" -X POST -d '{\"keyword\":\"铁塔\",\"pageNo\":1,\"pageSize\":20,\"type\":\"bidding\"}' -H \"Content-Type: application/json\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\")",
+      "Bash(curl -s --connect-timeout 15 --max-time 30 \"https://www.tower.com.cn/bidding/biddingList?keyword=铁塔&page=1\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\")",
+      "Bash(curl -s --connect-timeout 15 --max-time 30 \"http://bulletin.cebpubservice.com/\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\")",
+      "Bash(curl -s -I --connect-timeout 15 --max-time 30 \"https://www.tower.com.cn/\")",
+      "Bash(curl -s --connect-timeout 15 --max-time 30 \"http://search.ccgp.gov.cn/bxsearch?searchtype=1&page_index=1&bidSort=0&buyerName=&projectId=&pinMu=0&bidType=1&dbselect=bidx&kw=%E9%93%81%E5%A1%94&timeType=2&displayZone=%E4%BA%91%E5%8D%97&zoneId=53&pppStatus=0&agentName=\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/124.0.0.0 Safari/537.36\" -H \"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\" -H \"Accept-Language: zh-CN,zh;q=0.9\")",
+      "Bash(python -m scripts.bidding_scraper.main --dry-run)"
     ]
   }
 }

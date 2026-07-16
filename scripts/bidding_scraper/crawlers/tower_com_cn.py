@@ -48,22 +48,26 @@ class TowerComCnCrawler(BaseCrawler):
         return all_items
 
     def _fetch_keyword(self, keyword: str) -> List[BidItem]:
-        """获取指定关键词的招标信息"""
+        """获取指定关键词的招标信息
+
+        注意: www.tower.com.cn 当前从本网络不可达(连接超时)。
+        该网站可能已迁移域名或暂时下线。
+        """
         items = []
 
         try:
-            # 构建URL
             url = f"{self.search_url}?keyword={keyword}&page=1"
 
             html = fetch_page(
                 url,
                 headers=self._get_headers(),
                 proxies=self.proxies,
-                timeout=15,
+                timeout=10,  # 降低超时，快速失败
                 raw=True,
             )
 
             if not html:
+                logger.warning(f"[{self.name}] 网站不可达（连接超时），跳过关键词: {keyword}")
                 return items
 
             # 解析HTML
@@ -79,7 +83,7 @@ class TowerComCnCrawler(BaseCrawler):
                     items.append(item)
 
         except Exception as e:
-            logger.error(f"[{self.name}] 请求失败: {e}")
+            logger.error(f"[{self.name}] 请求失败（网站不可达）: {e}")
 
         return items
 

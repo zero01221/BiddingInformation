@@ -1,5 +1,10 @@
-"""中国招标投标公共服务平台爬虫"""
+"""中国招标投标公共服务平台爬虫
 
+注意: www.cebpubservice.com 主站使用 HTTPS 时返回 502，但 HTTP 版API仍可用。
+实际招标信息展示在 bulletin.cebpubservice.com 子域名下。
+"""
+
+import time
 from datetime import datetime
 from typing import List, Optional
 from ..models import BidItem
@@ -11,13 +16,21 @@ class CebpubserviceCrawler(BaseCrawler):
     """中国招标投标公共服务平台 (www.cebpubservice.com)"""
 
     name = "中国招标投标公共服务平台"
-    base_url = "https://www.cebpubservice.com"
-    search_url = "https://www.cebpubservice.com/ctpsp_iiss/searchbusinesstypebeforedooraction/getSearch.do"
+    # 注意: 该网站HTTPS不可用(502)，必须使用HTTP
+    base_url = "http://www.cebpubservice.com"
+    search_url = "http://www.cebpubservice.com/ctpsp_iiss/searchbusinesstypebeforedooraction/getSearch.do"
+    # 备用搜索页（bulletin子域名）
+    _fallback_search_url = "https://bulletin.cebpubservice.com/xxfbcmses/search/bulletin.html"
 
     def __init__(self, source_config: dict):
         """初始化"""
         super().__init__("cebpubservice", source_config)
         self.keywords = self.config.get("keywords", ["铁塔"])
+        # 允许配置文件覆盖搜索URL
+        if self.config.get("search_url"):
+            self.search_url = self.config["search_url"]
+        if self.config.get("base_url"):
+            self.base_url = self.config["base_url"]
 
     def _get_headers(self) -> dict:
         return {
@@ -68,11 +81,17 @@ class CebpubserviceCrawler(BaseCrawler):
                 headers=self._get_headers(),
                 data=data,
                 proxies=self.proxies,
-                timeout=15,
+                timeout=self.timeout,
                 raw=True,
             )
 
             if not html:
+                logger.warning(f"[{self.name}] HTTP请求返回空（网站可能502）")
+                return items
+
+            # 检测502错误页面
+            if "502 Bad Gateway" in html or "<title>502</title>" in html:
+                logger.warning(f"[{self.name}] 网站返回502错误，服务暂不可用")
                 return items
 
             # 解析JSON响应
@@ -85,6 +104,8 @@ class CebpubserviceCrawler(BaseCrawler):
                         item = self._parse_record(record)
                         if item:
                             items.append(item)
+                else:
+                    logger.debug(f"[{self.name}] API返回: success={resp_data.get('success')}, msg={resp_data.get('msg', '')}")
             except json.JSONDecodeError:
                 # 如果返回的是HTML，尝试解析
                 from bs4 import BeautifulSoup

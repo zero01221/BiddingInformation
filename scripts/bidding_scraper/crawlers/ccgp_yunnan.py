@@ -11,8 +11,8 @@ class CcgpYunnanCrawler(BaseCrawler):
     """云南省政府采购网 (www.ccgpyunnan.gov.cn)"""
 
     name = "云南省政府采购网"
-    base_url = "http://www.ccgpyunnan.gov.cn"
-    list_url = "http://www.ccgpyunnan.gov.cn/page/procurement/procurementList.html"
+    base_url = "http://www.ccgp-yunnan.gov.cn"
+    list_url = "http://www.ccgp-yunnan.gov.cn/page/procurement/procurementList.html"
 
     def __init__(self, source_config: dict):
         """初始化"""
@@ -23,7 +23,7 @@ class CcgpYunnanCrawler(BaseCrawler):
         return {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Referer": "http://www.ccgpyunnan.gov.cn/page/procurement/procurementList.html",
+            "Referer": "http://www.ccgp-yunnan.gov.cn/page/procurement/procurementList.html",
         }
 
     def _get_search_keywords(self) -> List[str]:
