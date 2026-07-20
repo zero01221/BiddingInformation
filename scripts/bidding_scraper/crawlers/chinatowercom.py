@@ -35,7 +35,6 @@ class ChinaTowerComCrawler(BaseCrawler):
     # 530600=昭通, 530700=丽江, 530800=普洱, 530900=临沧, 532300=楚雄,
     # 532500=红河, 532600=文山, 532800=西双版纳, 532900=大理,
     # 533100=德宏, 533300=怒江, 533400=迪庆
-    YUNNAN_AREA_CODE = "53"  # 前缀匹配覆盖云南全境
 
     def __init__(self, source_config: dict):
         """初始化"""
@@ -48,9 +47,7 @@ class ChinaTowerComCrawler(BaseCrawler):
         self._max_pages = self.config.get("max_pages", 3)
         # 时间范围：默认7天（近一周）
         self._days_limit = self.config.get("days_limit", 7)
-        # 地区过滤：默认限制云南
-        self._region_code = self.config.get("region_code", self.YUNNAN_AREA_CODE)
-        self._region_enabled = self.config.get("region_filter", True)
+        # 地区过滤：已移除，全国数据，筛选在前端完成
 
     def _get_headers(self) -> dict:
         """构建 API 请求头（完全模拟 detailpage.js 的 AJAX 调用）"""
@@ -84,14 +81,7 @@ class ChinaTowerComCrawler(BaseCrawler):
                 "isLike": True,
                 "likeType": 2,
             })
-        # 地区条件 — 限制云南（xiaqucode 前缀匹配 "53"）
-        if self._region_enabled and self._region_code:
-            condition.append({
-                "fieldName": "xiaqucode",
-                "equal": self._region_code,
-                "isLike": True,
-                "likeType": 2,  # 前缀匹配: "53" 匹配 530000, 530100, 532300 等
-            })
+        # 地区条件已移除 — 全国数据，筛选在前端完成
 
         # 时间条件 — 限制最近N天
         time_condition = None
@@ -272,7 +262,7 @@ class ChinaTowerComCrawler(BaseCrawler):
                 url=url,
                 date=date_obj.strftime("%Y-%m-%d"),
                 source=self.name,
-                description=description[:500] if description else "",
+                description=f"[采购公告] {description[:500]}" if description else "[采购公告]",
             )
         except Exception as e:
             logger.error(f"[{self.name}] 解析记录失败: {e}")

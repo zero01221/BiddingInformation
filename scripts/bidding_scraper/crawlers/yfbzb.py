@@ -102,11 +102,8 @@ class YfbzbCrawler(BaseCrawler):
                 seen_ids.add(item.item_id)
                 unique_items.append(item)
 
-        # 过滤云南地区
-        filtered_items = self.filter_by_region(unique_items)
-
         # 日期过滤：只保留最近N天的信息
-        filtered_items = self.filter_by_date(filtered_items)
+        filtered_items = self.filter_by_date(unique_items)
 
         return filtered_items
 
@@ -222,7 +219,7 @@ class YfbzbCrawler(BaseCrawler):
                 original_url=original_url,
                 date=date,
                 source=self.display_name,
-                description=area,
+                description=f"[招标公告] {area}" if area else "[招标公告]",
             )
 
         except Exception as e:

@@ -19,7 +19,6 @@ from .logger import get_logger
 from .base_crawler import CrawlerManager
 from .crawlers import (
     CcgpCrawler,
-    CcgpYunnanCrawler,
     CebpubserviceCrawler,
     ChinaTowerComCrawler,
     TowerComCnCrawler,
@@ -42,10 +41,7 @@ def create_crawler_manager() -> CrawlerManager:
     # 注册各数据源爬虫
     if "ccgp" in sources:
         manager.register(CcgpCrawler(sources["ccgp"]))
-    
-    if "ccgp_yunnan" in sources:
-        manager.register(CcgpYunnanCrawler(sources["ccgp_yunnan"]))
-    
+
     if "cebpubservice" in sources:
         manager.register(CebpubserviceCrawler(sources["cebpubservice"]))
     

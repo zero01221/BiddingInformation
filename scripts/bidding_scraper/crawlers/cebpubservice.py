@@ -1,182 +1,300 @@
 """中国招标投标公共服务平台爬虫
 
-注意: www.cebpubservice.com 主站使用 HTTPS 时返回 502，但 HTTP 版API仍可用。
-实际招标信息展示在 bulletin.cebpubservice.com 子域名下。
+API 接口: http://www.cebpubservice.com/ctpsp_iiss/searchbusinesstypebeforedooraction/getStringMethod.do
+搜索页: https://ctbpsp.com/#/bulletinList (WAF 保护，直接 API 不可用)
+
+注意:
+- ctbpsp.com 新站有网易易盾 WAF，API 路径 /cutominfoapi/ 无法直接调用
+- 老站 cebpubservice.com 的 getStringMethod.do 接口仍然可用，返回 JSON
+- 4 种公告类型: 招标公告、开标记录、评标公示、中标公告
 """
 
-import time
+import json
+import re
 from datetime import datetime
 from typing import List, Optional
+
+import requests
+
 from ..models import BidItem
 from ..base_crawler import BaseCrawler
-from ..utils import fetch_page, logger
+from ..utils import random_delay, logger
 
 
 class CebpubserviceCrawler(BaseCrawler):
-    """中国招标投标公共服务平台 (www.cebpubservice.com)"""
+    """中国招标投标公共服务平台 (cebpubservice.com → ctbpsp.com)"""
 
     name = "中国招标投标公共服务平台"
-    # 注意: 该网站HTTPS不可用(502)，必须使用HTTP
-    base_url = "http://www.cebpubservice.com"
-    search_url = "http://www.cebpubservice.com/ctpsp_iiss/searchbusinesstypebeforedooraction/getSearch.do"
-    # 备用搜索页（bulletin子域名）
-    _fallback_search_url = "https://bulletin.cebpubservice.com/xxfbcmses/search/bulletin.html"
+    base_url = "https://ctbpsp.com"
+
+    # 老站 JSON API（无 WAF 保护）
+    _api_url = (
+        "http://www.cebpubservice.com/ctpsp_iiss"
+        "/searchbusinesstypebeforedooraction/getStringMethod.do"
+    )
+
+    # 4 种公告类型（中文值直接 POST）
+    _BUSINESS_TYPES = [
+        "招标公告",
+        "开标记录",
+        "评标公示",
+        "中标公告",
+    ]
 
     def __init__(self, source_config: dict):
         """初始化"""
         super().__init__("cebpubservice", source_config)
         self.keywords = self.config.get("keywords", ["铁塔"])
-        # 允许配置文件覆盖搜索URL
-        if self.config.get("search_url"):
-            self.search_url = self.config["search_url"]
-        if self.config.get("base_url"):
-            self.base_url = self.config["base_url"]
+        self._max_pages = self.config.get("max_pages", 3)
+        # 每页条数（老站默认 15）
+        self._page_size = self.config.get("page_size", 20)
+        self._session = None
 
-    def _get_headers(self) -> dict:
-        return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json, text/javascript, */*",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": "https://www.cebpubservice.com/",
-        }
-
-    def _get_search_keywords(self) -> List[str]:
-        return self.keywords
-
-    def _get_max_pages(self) -> int:
-        return 3
-
-    def _get_page_delay(self) -> int:
-        return 3
+    # ------------------------------------------------------------------
+    # 主抓取逻辑
+    # ------------------------------------------------------------------
 
     def fetch(self) -> List[BidItem]:
         """获取招标信息"""
         all_items = []
 
+        # 创建 session（获取 JSESSIONID cookie）
+        self._session = requests.Session()
+        self._session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json, text/javascript, */*",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": "http://www.cebpubservice.com/ctpsp_iiss/"
+                       "searchbusinesstypebeforedooraction/getSearch.do",
+        })
+        if self.proxies:
+            self._session.proxies = self.proxies
+
+        # 访问搜索页获取 cookie
+        try:
+            self._session.get(
+                "http://www.cebpubservice.com/ctpsp_iiss/"
+                "searchbusinesstypebeforedooraction/getSearch.do",
+                timeout=self.timeout,
+            )
+        except Exception:
+            pass  # cookie 非必须，失败也继续
+
         for keyword in self.keywords:
             logger.info(f"[{self.display_name}] 搜索关键词: {keyword}")
-            items = self._fetch_keyword(keyword)
-            all_items.extend(items)
-            self.delay()
+
+            for bt in self._BUSINESS_TYPES:
+                try:
+                    items = self._fetch_business_type(keyword, bt)
+                    if items:
+                        logger.info(
+                            f"[{self.display_name}] {keyword} / {bt}: {len(items)} 条"
+                        )
+                    all_items.extend(items)
+                except Exception as e:
+                    logger.error(
+                        f"[{self.display_name}] {keyword}/{bt} 失败: {e}"
+                    )
+
+                # 类型间短暂延迟
+                random_delay(1, 3)
+
+            # 关键词间延迟
+            if keyword != self.keywords[-1]:
+                self.delay()
+
+        # 应用日期过滤（本地过滤）
+        all_items = self.filter_by_date(all_items)
 
         return all_items
 
-    def _fetch_keyword(self, keyword: str) -> List[BidItem]:
-        """获取指定关键词的招标信息"""
+    def _fetch_business_type(
+        self, keyword: str, business_type: str
+    ) -> List[BidItem]:
+        """查询单个公告类型，支持翻页"""
         items = []
 
-        try:
-            # 构建请求参数
-            data = {
-                "keyword": keyword,
-                "pageNum": 1,
-                "pageSize": 20,
-                "businesstype": "1",  # 招标公告
-            }
+        for page_num in range(1, self._max_pages + 1):
+            data = self._request_api(keyword, business_type, page_num)
+            if data is None:
+                break
 
-            html = fetch_page(
-                self.search_url,
-                method="POST",
-                headers=self._get_headers(),
-                data=data,
-                proxies=self.proxies,
-                timeout=self.timeout,
-                raw=True,
-            )
+            page_items = self._parse_response(data, business_type)
+            if not page_items:
+                break
 
-            if not html:
-                logger.warning(f"[{self.name}] HTTP请求返回空（网站可能502）")
-                return items
+            items.extend(page_items)
 
-            # 检测502错误页面
-            if "502 Bad Gateway" in html or "<title>502</title>" in html:
-                logger.warning(f"[{self.name}] 网站返回502错误，服务暂不可用")
-                return items
+            # 检查是否还有下一页
+            page_info = data.get("object", {}).get("page", {})
+            total_page = page_info.get("totalPage", 1)
+            if page_num >= total_page:
+                break
 
-            # 解析JSON响应
-            import json
-            try:
-                resp_data = json.loads(html)
-                if resp_data.get("success") and resp_data.get("data"):
-                    records = resp_data["data"].get("list", []) or resp_data["data"].get("records", [])
-                    for record in records:
-                        item = self._parse_record(record)
-                        if item:
-                            items.append(item)
-                else:
-                    logger.debug(f"[{self.name}] API返回: success={resp_data.get('success')}, msg={resp_data.get('msg', '')}")
-            except json.JSONDecodeError:
-                # 如果返回的是HTML，尝试解析
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(html, "html.parser")
-                list_items = soup.select("div.search-result li") or soup.select("ul.list li")
-                for item_el in list_items:
-                    item = self._parse_html_item(item_el)
-                    if item:
-                        items.append(item)
-
-        except Exception as e:
-            logger.error(f"[{self.name}] 请求失败: {e}")
+            # 页间延迟
+            random_delay(2, 4)
 
         return items
 
-    def _parse_record(self, record: dict) -> Optional[BidItem]:
-        """解析JSON记录"""
-        try:
-            title = record.get("title", "") or record.get("projectName", "")
-            url = record.get("url", "") or record.get("detailUrl", "")
-            pub_date = record.get("publishDate", "") or record.get("createTime", "")
+    # ------------------------------------------------------------------
+    # HTTP 请求
+    # ------------------------------------------------------------------
 
-            if not title:
+    def _request_api(
+        self, keyword: str, business_type: str, page_num: int
+    ) -> Optional[dict]:
+        """调用 getStringMethod.do API
+
+        注意：招标公告 需要 bulletinIssnTimeStart/Stop 时间范围参数，
+        否则始终返回 0 条。其他类型不需要。
+        """
+        from datetime import datetime, timedelta
+
+        data = {
+            "searchName": keyword,
+            "businessType": business_type,
+            "pageNo": str(page_num),
+            "row": str(self._page_size),
+        }
+
+        # 注意：searchArea 参数在老 API 中不生效（始终返回全国数据）
+        # 地区过滤由 fetch() 中调用 self.filter_by_region() 在本地完成
+
+        # 日期过滤（最近 N 天）
+        end = datetime.now() + timedelta(days=1)
+        start = end - timedelta(days=self.days_limit)
+        data["searchTimeStart"] = start.strftime("%Y-%m-%d")
+        data["searchTimeStop"] = end.strftime("%Y-%m-%d")
+
+        # 招标公告额外需要 bulletinIssnTime 时间范围，否则始终为 0
+        if business_type == "招标公告":
+            # 用更宽的时间范围确保覆盖
+            wide_start = end - timedelta(days=self.days_limit + 30)
+            data["bulletinIssnTimeStart"] = wide_start.strftime("%Y-%m-%d")
+            data["bulletinIssnTimeStop"] = end.strftime("%Y-%m-%d")
+
+        try:
+            resp = self._session.post(
+                self._api_url,
+                data=data,
+                timeout=self.timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("success") and data.get("object"):
+                return data
+            else:
+                logger.debug(
+                    f"[{self.display_name}] API 返回 success=False "
+                    f"for {keyword}/{business_type}"
+                )
                 return None
 
-            # 解析日期
-            date_obj = None
-            if pub_date:
-                try:
-                    date_obj = datetime.strptime(pub_date, "%Y-%m-%d %H:%M:%S")
-                except:
-                    try:
-                        date_obj = datetime.strptime(pub_date, "%Y-%m-%d")
-                    except:
-                        date_obj = datetime.now()
-
-            return BidItem(
-                title=title,
-                url=url if url.startswith("http") else f"{self.base_url}{url}",
-                date=date_obj.strftime("%Y-%m-%d") if date_obj else datetime.now().strftime("%Y-%m-%d"),
-                source=self.name,
-                description=record.get("content", "") or record.get("description", ""),
-            )
-        except Exception as e:
-            logger.error(f"[{self.name}] 解析记录失败: {e}")
+        except requests.RequestException as e:
+            logger.error(f"[{self.display_name}] 请求失败: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"[{self.display_name}] JSON 解析失败: {e}")
             return None
 
-    def _parse_html_item(self, item_el) -> Optional[BidItem]:
-        """解析HTML列表项"""
-        try:
-            title_el = item_el.select_one("a") or item_el.select_one("h3")
-            if not title_el:
-                return None
+    # ------------------------------------------------------------------
+    # 数据解析
+    # ------------------------------------------------------------------
 
-            title = title_el.get_text(strip=True)
-            href = title_el.get("href", "")
-            url = href if href.startswith("http") else f"{self.base_url}{href}"
+    def _parse_response(self, data: dict, business_type: str = "") -> List[BidItem]:
+        """解析 API JSON 响应"""
+        records = data.get("object", {}).get("returnlist", [])
+        if not records:
+            return []
 
-            date_el = item_el.select_one("span.date") or item_el.select_one("time")
-            date_str = date_el.get_text(strip=True) if date_el else datetime.now().strftime("%Y-%m-%d")
+        items = []
+        for rec in records:
+            item = self._record_to_bid_item(rec, business_type)
+            if item:
+                items.append(item)
 
-            desc_el = item_el.select_one("p") or item_el.select_one("div.desc")
-            description = desc_el.get_text(strip=True) if desc_el else ""
+        return items
 
-            return BidItem(
-                title=title,
-                url=url,
-                date=date_str,
-                source=self.name,
-                description=description,
-            )
-        except Exception as e:
-            logger.error(f"[{self.name}] 解析HTML项失败: {e}")
+    def _record_to_bid_item(self, rec: dict, business_type: str = "") -> Optional[BidItem]:
+        """将 API 记录转换为 BidItem"""
+        title = (rec.get("businessObjectName") or "").strip()
+        if not title:
             return None
+
+        # 业务 ID
+        business_id = rec.get("businessId", "")
+
+        # 构建详情页 URL（使用新站 ctbpsp.com）
+        url = (
+            f"https://ctbpsp.com/#/bulletinDetail"
+            f"?uuid={business_id}"
+            if business_id
+            else ""
+        )
+
+        # 日期
+        receive_time = rec.get("receiveTime", "")
+        date_str = self._normalize_date(receive_time)
+
+        # 描述：[公告类型] 来源平台 | 地区 | 行业
+        parts = [f"[{business_type}]"] if business_type else []
+        for field in ["transactionPlatfName", "regionName", "industriesType"]:
+            v = (rec.get(field) or "").strip()
+            if v:
+                parts.append(v)
+        description = " | ".join(parts) if parts else ""
+
+        return BidItem(
+            title=title,
+            url=url,
+            date=date_str,
+            source=self.name,
+            description=description,
+            original_url="",
+        )
+
+    # ------------------------------------------------------------------
+    # 工具方法
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_date(text: str) -> str:
+        """日期标准化为 YYYY-MM-DD"""
+        if not text:
+            return datetime.now().strftime("%Y-%m-%d")
+
+        text = text.strip()
+
+        # 常见格式
+        formats = [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y/%m/%d",
+            "%Y年%m月%d日",
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+
+        # 正则兜底
+        m = re.search(r"(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})", text)
+        if m:
+            try:
+                return (
+                    f"{int(m.group(1)):04d}-"
+                    f"{int(m.group(2)):02d}-"
+                    f"{int(m.group(3)):02d}"
+                )
+            except ValueError:
+                pass
+
+        return datetime.now().strftime("%Y-%m-%d")
