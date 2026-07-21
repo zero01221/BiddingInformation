@@ -1,6 +1,7 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0%"
+cd /d "%~dp0"
+
 echo ========================================
 echo     BiddingInformation 一键更新脚本
 echo ========================================
@@ -25,33 +26,21 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 3. 检查是否有变更
-echo [3/4] 检查文件变更...
+REM 3. 提交并推送更新（每次都提交，不判断是否有变更）
+echo [3/4] 提交并推送更新...
 git add output/
-git diff --cached --quiet
-if errorlevel 0 (
-    echo 没有检测到新数据，跳过提交。
-) else (
-    REM 有变更，提交并推送
-    echo 检测到数据更新，正在提交...
-    git commit -m "自动更新招标数据 (%date% %time%)"
-    if errorlevel 1 (
-        echo [错误] Git 提交失败。
-        pause
-        exit /b 1
-    )
-    echo [4/4] 正在推送到 GitHub...
-    git push origin master
-    if errorlevel 1 (
-        echo [错误] Git 推送失败，请检查网络和权限。
-        pause
-        exit /b 1
-    )
-    echo.
-    echo ========================================
-    echo     更新完成！GitHub Actions 将自动部署
-    echo ========================================
+git commit -m "自动更新招标数据 (%date% %time%)" || echo 没有新数据需要提交，跳过
+git push origin master
+if errorlevel 1 (
+    echo [错误] Git 推送失败，请检查网络和权限。
+    pause
+    exit /b 1
 )
+
+echo.
+echo ========================================
+echo     更新完成！GitHub Actions 将自动部署
+echo ========================================
 
 REM 4. 退出虚拟环境
 call deactivate
