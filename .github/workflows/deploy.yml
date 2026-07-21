@@ -1,23 +1,18 @@
-name: 抓取招标信息并部署到 GitHub Pages
+name: 部署静态页面到 GitHub Pages
 
 on:
   push:
     branches:
       - master
-  # schedule:
-  #   # 每天 UTC 22:00（北京时间 6:00）
-  #   - cron: '0 22 * * *'
-  # 也支持手动触发
   workflow_dispatch:
 
-# GitHub Pages 部署权限
 permissions:
   contents: write
   pages: write
   id-token: write
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -27,25 +22,62 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 设置 Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: 安装依赖
-        run: pip install -r requirements.txt
-
-      - name: 运行爬虫
-        run: python -m scripts.bidding_scraper.main
-
-      - name: 生成静态 HTML
-        run: python scripts/serve_web.py --output output/index.html
-
       - name: 部署到 GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./output
           publish_branch: gh-pages
-          # 只保留 index.html 和 bidding_feed.xml
           keep_files: false
+
+# name: 抓取招标信息并部署到 GitHub Pages
+
+# on:
+#   push:
+#     branches:
+#       - master
+#   # schedule:
+#   #   # 每天 UTC 22:00（北京时间 6:00）
+#   #   - cron: '0 22 * * *'
+#   # 也支持手动触发
+#   workflow_dispatch:
+
+# # GitHub Pages 部署权限
+# permissions:
+#   contents: write
+#   pages: write
+#   id-token: write
+
+# jobs:
+#   build-and-deploy:
+#     runs-on: ubuntu-latest
+#     environment:
+#       name: github-pages
+#       url: ${{ steps.deployment.outputs.page_url }}
+
+#     steps:
+#       - name: 检出代码
+#         uses: actions/checkout@v4
+
+#       - name: 设置 Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.11'
+
+#       - name: 安装依赖
+#         run: pip install -r requirements.txt
+
+#       - name: 运行爬虫
+#         run: python -m scripts.bidding_scraper.main
+
+#       - name: 生成静态 HTML
+#         run: python scripts/serve_web.py --output output/index.html
+
+#       - name: 部署到 GitHub Pages
+#         uses: peaceiris/actions-gh-pages@v4
+#         with:
+#           github_token: ${{ secrets.GITHUB_TOKEN }}
+#           publish_dir: ./output
+#           publish_branch: gh-pages
+#           # 只保留 index.html 和 bidding_feed.xml
+#           keep_files: false
