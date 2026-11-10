@@ -102,15 +102,20 @@ const out = {
     all: ids(F({})),
     yunnan: ids(F({ province: '云南' })),
     shandong: ids(F({ province: '山东' })),
+    multiYunnanShandong: ids(F({ provinces: ['云南', '山东'] })),
+    multiEmptyMeansAll: ids(F({ provinces: [] })),
+    multiWithKeyword: ids(F({ provinces: ['云南', '山东'], keyword: '昆明' })),
+    multiDedup: ids(F({ provinces: ['云南', '云南', '', '山东'] })),
     keywordTower: ids(F({ keyword: '铁塔' })),
     keywordKunming: ids(F({ keyword: '昆明' })),
     dateRange: ids(F({ dateFrom: '2026-07-25', dateTo: '2026-08-02' })),
-    intersection: ids(F({ province: '云南', keyword: '铁塔',
+    intersection: ids(F({ provinces: ['云南'], keyword: '铁塔',
                            dateFrom: '2026-07-25', dateTo: '2026-08-02' })),
     partialIntersection: ids(F({ province: '云南',
                                  dateFrom: '2026-07-25', dateTo: '2026-08-02' })),
     invalidRange: ids(F({ dateFrom: '2026-08-02', dateTo: '2026-07-25' }))
   },
+  dateRange: null,
   download: {
     L4: inspectDownload({ id: 'DL4', title: '无附件公告', download_level: 'L4',
       download: { level: 'L4', url: '', enabled: false, filename: '',
@@ -144,10 +149,58 @@ const out = {
   noticeText: (nodeCache.notice || {}).textContent || '',
   noticeClass: (nodeCache.notice || {}).className || '',
   noticeHidden: (nodeCache.notice || {}).hidden,
-  regionValue: (nodeCache.fRegion || {}).value || '',
-  regionOptions: nodeCache.fRegion
-    ? nodeCache.fRegion.children.map(function (o) { return { text: o.textContent, value: o.value }; })
+  selectedRegions: api.selectedRegions(),
+  regionToggleText: (nodeCache.fRegionToggle || {}).textContent || '',
+  regionOptions: nodeCache.fRegionOptions
+    ? nodeCache.fRegionOptions.children.map(function (label) {
+        const kids = label.children || [];
+        const box = kids.find(function (c) { return c.tag === 'input'; });
+        const text = kids.find(function (c) { return c.tag === 'span'; });
+        return {
+          value: box ? box.value : null,
+          checked: box ? !!box.checked : null,
+          text: text ? text.textContent : ''
+        };
+      })
     : [],
+  regionMultiAfterSet: (function () {
+    api.setRegions(['云南', '山东']);
+    const selected = api.selectedRegions();
+    const boxes = (nodeCache.fRegionOptions || { children: [] }).children.map(function (label) {
+      const box = (label.children || []).find(function (c) { return c.tag === 'input'; });
+      return box ? { value: box.value, checked: !!box.checked } : null;
+    });
+    const result = {
+      selected: selected,
+      toggleText: (nodeCache.fRegionToggle || {}).textContent || '',
+      checkedValues: boxes.filter(function (b) { return b && b.checked; })
+        .map(function (b) { return b.value; })
+    };
+    api.setRegions([]);
+    result.clearedToggleText = (nodeCache.fRegionToggle || {}).textContent || '';
+    return result;
+  })(),
   healthBarText: flattenText(nodeCache.healthBar || new FakeNode('div'))
 };
+
+// 日期约束模拟放在最后，避免它触发的 error 提示覆盖上面记录的初始「数据过期」提示
+const fromEl = nodeCache.fDateFrom;
+const toEl = nodeCache.fDateTo;
+const validPair = api.dateFilterValid('2026-07-25', '2026-08-02');
+const invalidPair = api.dateFilterValid('2026-08-02', '2026-07-25');
+fromEl.value = '2026-08-05';
+toEl.value = '2026-07-01';
+const accepted = api.normalizeDateRange();
+out.dateRange = {
+  validPair: validPair,
+  invalidPair: invalidPair,
+  accepted: accepted,
+  correctedFrom: fromEl.value,
+  correctedTo: toEl.value,
+  minOfTo: toEl.min,
+  maxOfFrom: fromEl.max,
+  errorNotice: (nodeCache.notice || {}).textContent || '',
+  errorClass: (nodeCache.notice || {}).className || ''
+};
+
 process.stdout.write(JSON.stringify(out));

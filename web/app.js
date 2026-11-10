@@ -36,6 +36,8 @@
   var PREFIX = META.asset_prefix || '';
   var STALE_DAYS = Number(META.stale_days || 2);
   var DEFAULT_VIEW = META.default_view || '云南';
+  // 已选地区（OR 语义）。空数组 = 全部（全国）；默认云南优先。
+  var SELECTED_REGIONS = [];
 
   // ------------------------------------------------------------------
   // DOM / 安全工具
@@ -158,16 +160,41 @@
     return false;
   }
 
-  /** 按 state = {keyword, province, dateFrom, dateTo} 过滤，返回交集结果。 */
+  /** 多地区 OR：命中任一已选地区即通过；空数组表示不过滤（全国）。 */
+  function matchAnyRegion(item, provinces) {
+    if (!provinces || !provinces.length) { return true; }
+    for (var i = 0; i < provinces.length; i++) {
+      if (matchRegion(item, provinces[i])) { return true; }
+    }
+    return false;
+  }
+
+  /** 规范化地区选择：接受数组或单值，去空、去重、保持顺序。 */
+  function normalizeProvinces(value) {
+    var raw = Array.isArray(value) ? value : (value ? [value] : []);
+    var out = [];
+    for (var i = 0; i < raw.length; i++) {
+      var name = String(raw[i] || '').trim();
+      if (name && name !== '全部（全国）' && out.indexOf(name) === -1) { out.push(name); }
+    }
+    return out;
+  }
+
+  /**
+   * 按 state = {keyword, provinces | province, dateFrom, dateTo} 过滤，返回交集结果。
+   * ``provinces`` 为数组时按 OR 匹配；保留 ``province`` 单值以兼容既有调用。
+   */
   function applyFilters(state) {
     var s = state || {};
     var keyword = String(s.keyword || '').trim().toLowerCase();
-    var province = s.province || '';
+    var provinces = normalizeProvinces(
+      s.provinces !== undefined ? s.provinces : s.province
+    );
     var from = s.dateFrom || '';
     var to = s.dateTo || '';
     return ITEMS.filter(function (item) {
       if (keyword && String(item.title || '').toLowerCase().indexOf(keyword) === -1) { return false; }
-      if (province && !matchRegion(item, province)) { return false; }
+      if (!matchAnyRegion(item, provinces)) { return false; }
       if (from || to) {
         var date = String(item.date || '');
         if (!date) { return false; }
@@ -181,6 +208,37 @@
 
   function dateFilterValid(from, to) {
     return !(from && to && from > to);
+  }
+
+  /** 起始 / 结束日期互斥约束：用 min/max 让原生日期控件直接禁止非法选择。 */
+  function syncDateBounds() {
+    var fromEl = document.getElementById('fDateFrom');
+    var toEl = document.getElementById('fDateTo');
+    var from = fromEl.value || '';
+    var to = toEl.value || '';
+    toEl.min = from;
+    fromEl.max = to;
+  }
+
+  /**
+   * 修正非法区间：起始晚于结束时，把结束日期对齐到起始日期并给出明确提示。
+   * 返回 true 表示区间合法；false 表示已自动纠正（调用方仍可继续渲染）。
+   */
+  function normalizeDateRange(announce) {
+    var fromEl = document.getElementById('fDateFrom');
+    var toEl = document.getElementById('fDateTo');
+    var from = fromEl.value || '';
+    var to = toEl.value || '';
+    if (from && to && from > to) {
+      toEl.value = from;
+      syncDateBounds();
+      if (announce !== false) {
+        showNotice('起始日期不能晚于结束日期，已自动将结束日期调整为 ' + from, 'error');
+      }
+      return false;
+    }
+    syncDateBounds();
+    return true;
   }
 
   // ------------------------------------------------------------------
@@ -395,7 +453,7 @@
   function currentState() {
     return {
       keyword: document.getElementById('fTitle').value,
-      province: document.getElementById('fRegion').value,
+      provinces: SELECTED_REGIONS.slice(),
       dateFrom: document.getElementById('fDateFrom').value,
       dateTo: document.getElementById('fDateTo').value
     };
@@ -407,51 +465,124 @@
     render(filtered);
   }
 
-  function initRegionSelect() {
-    var select = document.getElementById('fRegion');
-    select.textContent = '';
-    var all = el('option', '', '全部（全国）');
-    all.value = '';
-    select.appendChild(all);
-    PROVINCES.forEach(function (province) {
-      var option = el('option', '', String(province));
-      option.value = String(province);
-      select.appendChild(option);
+  /** 地区多选：折叠面板 + 复选框，空选择 = 全部（全国）。 */
+  function regionToggleLabel() {
+    if (!SELECTED_REGIONS.length) { return '全部（全国）'; }
+    if (SELECTED_REGIONS.length === 1) { return SELECTED_REGIONS[0]; }
+    return SELECTED_REGIONS[0] + ' 等 ' + SELECTED_REGIONS.length + ' 个地区';
+  }
+
+  function renderRegionToggle() {
+    document.getElementById('fRegionToggle').textContent = regionToggleLabel();
+  }
+
+  /** 同步面板内所有复选框的勾选态（含「全部（全国）」互斥项）。 */
+  function syncRegionBoxes() {
+    var optionsBox = document.getElementById('fRegionOptions');
+    var labels = optionsBox.children || [];
+    for (var i = 0; i < labels.length; i++) {
+      var kids = labels[i].children || [];
+      for (var j = 0; j < kids.length; j++) {
+        var box = kids[j];
+        if (box.tag !== 'input') { continue; }
+        box.checked = box.value === ''
+          ? SELECTED_REGIONS.length === 0
+          : SELECTED_REGIONS.indexOf(box.value) !== -1;
+      }
+    }
+  }
+
+  function setRegions(next) {
+    SELECTED_REGIONS = normalizeProvinces(next);
+    renderRegionToggle();
+    syncRegionBoxes();
+    refresh();
+  }
+
+  function initRegionPicker() {
+    var optionsBox = document.getElementById('fRegionOptions');
+    optionsBox.textContent = '';
+
+    function addOption(name) {
+      var label = el('label', 'region-option');
+      var box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = String(name);
+      box.checked = SELECTED_REGIONS.indexOf(name) !== -1;
+      box.addEventListener('change', function () {
+        var next = SELECTED_REGIONS.slice();
+        var at = next.indexOf(name);
+        if (box.checked && at === -1) { next.push(name); }
+        if (!box.checked && at !== -1) { next.splice(at, 1); }
+        setRegions(next);
+      });
+      label.appendChild(box);
+      label.appendChild(el('span', '', String(name)));
+      optionsBox.appendChild(label);
+    }
+
+    // 「全部（全国）」作为第一项：勾选即清空选择，语义等价于不过滤。
+    var allLabel = el('label', 'region-option region-option-all');
+    var allBox = document.createElement('input');
+    allBox.type = 'checkbox';
+    allBox.value = '';
+    allBox.checked = SELECTED_REGIONS.length === 0;
+    allBox.addEventListener('change', function () {
+      // 勾选 = 全国（空选择）；取消勾选 = 回到默认云南视图，避免出现「无选择但显示为全国」。
+      setRegions(allBox.checked ? [] : (PROVINCES.indexOf(DEFAULT_VIEW) >= 0 ? [DEFAULT_VIEW] : []));
     });
-    // 默认云南优先视图；切换到「全部（全国）」即可看全国数据
-    select.value = PROVINCES.indexOf(DEFAULT_VIEW) >= 0 ? DEFAULT_VIEW : '';
+    allLabel.appendChild(allBox);
+    allLabel.appendChild(el('span', '', '全部（全国）'));
+    optionsBox.appendChild(allLabel);
+
+    PROVINCES.forEach(addOption);
+    renderRegionToggle();
   }
 
   function bindEvents() {
-    ['fRegion', 'fDateFrom', 'fDateTo', 'fTitle'].forEach(function (id) {
+    ['fDateFrom', 'fDateTo', 'fTitle'].forEach(function (id) {
       var node = document.getElementById(id);
-      node.addEventListener('change', refresh);
+      node.addEventListener('change', function () {
+        normalizeDateRange();
+        refresh();
+      });
       node.addEventListener('input', refresh);
+    });
+    document.getElementById('fRegionToggle').addEventListener('click', function () {
+      var panel = document.getElementById('fRegionPanel');
+      panel.hidden = !panel.hidden;
+    });
+    document.getElementById('fRegionAll').addEventListener('click', function () {
+      setRegions([]);
+    });
+    document.getElementById('fRegionYunnan').addEventListener('click', function () {
+      setRegions(PROVINCES.indexOf(DEFAULT_VIEW) >= 0 ? [DEFAULT_VIEW] : []);
     });
     document.getElementById('fReset').addEventListener('click', function () {
       document.getElementById('fTitle').value = '';
       document.getElementById('fDateFrom').value = '';
       document.getElementById('fDateTo').value = '';
-      document.getElementById('fRegion').value =
-        PROVINCES.indexOf(DEFAULT_VIEW) >= 0 ? DEFAULT_VIEW : '';
-      refresh();
+      syncDateBounds();
+      setRegions(PROVINCES.indexOf(DEFAULT_VIEW) >= 0 ? [DEFAULT_VIEW] : []);
     });
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { return; }
       var notice = document.getElementById('notice');
       if (notice.hidden) {
         showNotice('页面已恢复显示 · 数据截至 ' + safeValue(META.data_as_of, '未知') +
-          '。离线文件不会自动更新，如需最新数据请用 Windows 端重新生成并覆盖本文件。', 'info');
+          '。离线文件不会自动更新，如需最新数据请用抓取端重新生成并覆盖本文件。', 'info');
       }
     });
   }
 
   function init() {
+    SELECTED_REGIONS = PROVINCES.indexOf(DEFAULT_VIEW) >= 0 ? [DEFAULT_VIEW] : [];
     renderMeta();
     renderNotices();
     renderHealth();
-    initRegionSelect();
+    initRegionPicker();
     bindEvents();
+    syncDateBounds();
     refresh();
   }
 
@@ -462,12 +593,19 @@
     applyFilters: applyFilters,
     renderDownload: renderDownload,
     matchRegion: matchRegion,
+    matchAnyRegion: matchAnyRegion,
+    normalizeProvinces: normalizeProvinces,
+    normalizeDateRange: normalizeDateRange,
+    syncDateBounds: syncDateBounds,
+    dateFilterValid: dateFilterValid,
+    setRegions: setRegions,
     isSafeHttp: isSafeHttp,
     isSafeAsset: isSafeAsset,
     encodeRFC5987: encodeRFC5987,
     refresh: refresh,
     items: ITEMS,
-    meta: META
+    meta: META,
+    selectedRegions: function () { return SELECTED_REGIONS.slice(); }
   };
 
   if (document.readyState === 'loading') {

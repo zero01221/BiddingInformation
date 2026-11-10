@@ -9,7 +9,7 @@
     python -m scripts.bidding_scraper.main --list --days 7
     python -m scripts.bidding_scraper.main --dry-run       # 只打印，不写产物
 
-旧版通知分支（原 :117-162）已彻底删除：本期不做任何消息推送，信息只在页面呈现。
+本期不做消息推送，所有信息只在页面呈现。
 """
 
 import argparse
@@ -42,7 +42,7 @@ from .pipeline import BuildResult, Pipeline
 
 logger = get_logger(__name__)
 
-# 配置键 → 爬虫类。旧实现 6 个分支且缺 ynggzy，导致云南源零注册。
+# 配置键 → 爬虫类；新增数据源时只需在此登记并在配置中启用。
 _CRAWLER_CLASSES = {
     "ccgp": CcgpCrawler,
     "cebpubservice": CebpubserviceCrawler,

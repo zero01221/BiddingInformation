@@ -17,9 +17,18 @@
   </header>
 
   <section class="panel filters" aria-label="筛选条件">
-    <div class="field">
-      <label for="fRegion">地区</label>
-      <select id="fRegion"><option value="">全部（全国）</option></select>
+    <div class="field region-field">
+      <label>地区（可多选）</label>
+      <div class="region-picker" id="fRegion">
+        <button type="button" id="fRegionToggle" class="region-toggle">云南</button>
+        <div class="region-panel" id="fRegionPanel" hidden>
+          <div class="region-actions">
+            <button type="button" id="fRegionAll" class="btn btn-ghost">全部（全国）</button>
+            <button type="button" id="fRegionYunnan" class="btn btn-ghost">仅云南</button>
+          </div>
+          <div class="region-options" id="fRegionOptions"></div>
+        </div>
+      </div>
     </div>
     <div class="field">
       <label for="fDateFrom">起始日期</label>

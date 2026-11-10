@@ -124,10 +124,6 @@ class Config:
         """获取铁塔核心关键词。"""
         return self.get_list("keywords.core")
 
-    def get_yunnan_keywords(self) -> List[str]:
-        """获取云南地区关键词（仅用于默认视图，不参与过滤）。"""
-        return self.get_list("keywords.yunnan")
-
     def get_industry_keywords(self) -> List[str]:
         """获取行业关键词。"""
         return self.get_list("keywords.industry")

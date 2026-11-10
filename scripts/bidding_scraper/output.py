@@ -1,9 +1,8 @@
 # coding=utf-8
 """输出格式化模块（控制台摘要 + RSS）。
 
-RSS 保留（FR-14）。修复：旧版 ``format_rss`` 默认截断 200 条、且上游
-``get_all_items(limit=100)`` 已静默丢数据；现改为从 Exporter 的全量载荷生成，
-``output.max_items: 0`` 表示不截断。``escape`` 保持不变，XML 转义已安全。
+RSS 从 Exporter 的全量载荷生成，``output.max_items: 0`` 表示不截断；
+``escape`` 负责 XML 转义。地区与公告类型不参与输出过滤。
 """
 
 import os

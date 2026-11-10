@@ -138,9 +138,71 @@ class TestThreeFiltersIntersection:
         assert js_contract["filters"]["invalidRange"] == []
 
 
+class TestRegionMultiSelect:
+    """地区多选：OR 语义、空选择=全国、与关键字仍取交集、勾选态同步。"""
+
+    def test_default_selected_is_yunnan(self, js_contract):
+        assert js_contract["selectedRegions"] == ["云南"]
+        assert "云南" in js_contract["regionToggleText"]
+
+    def test_multi_province_is_union(self, js_contract):
+        # E 是北京，选云南+山东不应包含；F 是云南昆明，应在结果中
+        expected = ["A", "B", "C", "D", "F"]
+        assert js_contract["filters"]["multiYunnanShandong"] == expected
+        assert "E" not in js_contract["filters"]["multiYunnanShandong"]
+        assert js_contract["filters"]["multiEmptyMeansAll"] == ["A", "B", "C", "D", "E", "F"]
+
+    def test_multi_combines_with_keyword_as_intersection(self, js_contract):
+        assert js_contract["filters"]["multiWithKeyword"] == ["A", "F"]
+
+    def test_duplicate_and_empty_entries_are_normalized(self, js_contract):
+        assert js_contract["filters"]["multiDedup"] == ["A", "B", "C", "D", "F"]
+
+    def test_options_include_nationwide_and_provinces(self, js_contract):
+        options = js_contract["regionOptions"]
+        assert options[0]["text"] == "全部（全国）" and options[0]["value"] == ""
+        assert any(o["text"] == "云南" and o["value"] == "云南" for o in options)
+        assert any(o["text"] == "山东" and o["value"] == "山东" for o in options)
+        yunnan = next(o for o in options if o["value"] == "云南")
+        assert yunnan["checked"] is True
+
+    def test_set_regions_updates_checkboxes_and_toggle(self, js_contract):
+        state = js_contract["regionMultiAfterSet"]
+        assert state["selected"] == ["云南", "山东"]
+        assert set(state["checkedValues"]) == {"云南", "山东"}
+        assert "2" in state["toggleText"]
+        assert state["clearedToggleText"] == "全部（全国）"
+
+
+class TestDateRangeConstraint:
+    """起始日期不得晚于结束日期：纯函数防御 + UI 自动纠正 + min/max 约束。"""
+
+    def test_date_filter_valid_predicate(self, js_contract):
+        data = js_contract["dateRange"]
+        assert data["validPair"] is True
+        assert data["invalidPair"] is False
+
+    def test_invalid_range_is_auto_corrected(self, js_contract):
+        data = js_contract["dateRange"]
+        assert data["accepted"] is False
+        assert data["correctedFrom"] == "2026-08-05"
+        assert data["correctedTo"] == "2026-08-05"
+        assert data["correctedTo"] >= data["correctedFrom"]
+
+    def test_native_min_max_bounds_are_set(self, js_contract):
+        data = js_contract["dateRange"]
+        assert data["minOfTo"] == "2026-08-05"
+        assert data["maxOfFrom"] == "2026-08-05"
+
+    def test_correction_shows_explicit_error_notice(self, js_contract):
+        data = js_contract["dateRange"]
+        assert "起始日期不能晚于结束日期" in data["errorNotice"]
+        assert "error" in data["errorClass"]
+
+
 class TestDefaultViewAndMeta:
     def test_default_view_is_yunnan_and_switchable_to_nationwide(self, js_contract):
-        assert js_contract["regionValue"] == "云南"
+        assert js_contract["selectedRegions"] == ["云南"]
         options = js_contract["regionOptions"]
         assert options[0]["text"] == "全部（全国）" and options[0]["value"] == ""
         assert any(o["value"] == "云南" for o in options)

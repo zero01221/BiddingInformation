@@ -370,7 +370,7 @@ class Database:
         """获取全部记录（按日期降序）。
 
         Args:
-            limit: 可选上限；**默认 None = 全量**（修复旧版 limit=100 静默截断）。
+            limit: 可选上限；**默认 None = 全量**。
         """
         sql = f"{_SELECT_ALL_SQL} ORDER BY date DESC, created_at DESC"
         params: tuple = ()

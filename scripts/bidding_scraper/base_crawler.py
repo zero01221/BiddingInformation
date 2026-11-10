@@ -1,9 +1,8 @@
 # coding=utf-8
 """爬虫基类与爬虫管理器。
 
-关键修复（ARCHITECTURE §2 / §7 T03）：把「相关性 → 地区打标 → 下载档位 →
-去重键」的处理链**真正串接进 :meth:`BaseCrawler.run`**。旧实现中
-``filters.py`` 在活跃源零调用，导致铁塔相关性与地区信息从未入库。
+关键实现（ARCHITECTURE §2 / §7 T03）：把「相关性 → 地区打标 → 下载档位 →
+去重键」的处理链**真正串接进 :meth:`BaseCrawler.run`**，确保每个活跃源都经过。
 
 分工：
 - 相关性：强制 ``keywords.core`` / ``industry`` 校验，**不要求云南**；
@@ -113,23 +112,6 @@ class BaseCrawler(ABC):
     def is_healthy(self) -> bool:
         """检查是否健康。"""
         return self.status.healthy
-
-    # ------------------------------------------------------------------
-    # 兼容旧接口（语义已收紧：地区不再过滤）
-    # ------------------------------------------------------------------
-
-    def filter_items(self, items: List[BidItem], require_yunnan: bool = False) -> List[BidItem]:
-        """按相关性过滤（``require_yunnan`` 已废弃，地区只打标不过滤）。"""
-        return [item for item in items if is_relevant(item.title, item.description)]
-
-    def filter_by_region(self, items: List[BidItem]) -> List[BidItem]:
-        """只打标不过滤，返回全部条目。"""
-        for item in items:
-            region = tag_region(item.title, item.description)
-            item.province = region.province
-            item.city = region.city
-            item.regions = json.dumps(region.regions, ensure_ascii=False)
-        return items
 
     def filter_by_date(self, items: List[BidItem]) -> List[BidItem]:
         """只保留最近 N 天公告；日期不可解析时标 ``date_valid=0`` 并保留。"""

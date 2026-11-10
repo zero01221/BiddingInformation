@@ -162,7 +162,7 @@ class CebpubserviceCrawler(BaseCrawler):
         }
 
         # 注意：searchArea 参数在老 API 中不生效（始终返回全国数据）
-        # 地区过滤由 fetch() 中调用 self.filter_by_region() 在本地完成
+        # 地区不由本源过滤：全国数据全量入库，由 region_tagger 只打标不过滤
 
         # 日期过滤（最近 N 天）
         end = datetime.now() + timedelta(days=1)

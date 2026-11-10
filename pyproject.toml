@@ -1,5 +1,5 @@
 [project]
-name = "irontower-information"
+name = "bidding-information"
 version = "2.0.0"
 description = "铁塔招标信息聚合应用（离线优先的零构建纯静态 HTML + 数据内联）"
 requires-python = ">=3.13"

@@ -64,26 +64,6 @@ keywords:
     - 数字电视发射
     - 无线电发射
 
-  # 云南地区关键词：仅用于前端「云南优先」默认视图，不参与入库过滤
-  yunnan:
-    - 云南
-    - 昆明
-    - 曲靖
-    - 玉溪
-    - 保山
-    - 昭通
-    - 丽江
-    - 普洱
-    - 临沧
-    - 楚雄
-    - 红河
-    - 文山
-    - 西双版纳
-    - 大理
-    - 德宏
-    - 怒江
-    - 迪庆
-
   # 行业关键词：与 core 并列命中即通过相关性校验
   industry:
     - 通信
@@ -181,7 +161,7 @@ sources:
     enabled: true
     name: 云南省公共资源交易中心
     api_url: https://ggzy.yn.gov.cn/ynggfwpt-home-api/jyzyCenter/jyInfo/gcjs/getZbggList
-    # 云南优先：已在 crawlers/__init__.py 导出并在 Pipeline 注册（旧版零注册缺陷已修）。
+    # 云南优先：ynggzy 在 crawlers/__init__.py 导出并在 Pipeline 注册。
 
 request:
   timeout: 30
@@ -233,7 +213,7 @@ output:
   rss_title: 铁塔招标信息
   rss_description: 全国铁塔相关招标信息聚合
   rss_link: https://github.com/zero01221/BiddingInformation
-  # 0 表示全量导出，不截断（旧实现 get_all_items(limit=100) 静默丢数据已修）
+  # 0 表示全量导出，不截断
   max_items: 0
   index_file: output/index.html
   data_file: output/data.json

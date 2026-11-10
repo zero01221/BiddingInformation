@@ -4,11 +4,12 @@
 from __future__ import annotations
 
 import json
+from typing import List
 
 import pytest
 
 from scripts.bidding_scraper.base_crawler import BaseCrawler
-from scripts.bidding_scraper.filters import RegionFilter
+from scripts.bidding_scraper.models import BidItem
 from scripts.bidding_scraper.region_tagger import RegionTagger, tag
 
 # 与 config/regions.json 的 yunnan_cities 对齐的 16 个州市
@@ -19,12 +20,14 @@ YUNNAN_CITIES = [
 
 
 class _TaggingCrawler(BaseCrawler):
-    """仅用于调用无状态的 filter_by_region，不触发抓取。"""
+    """离线爬虫桩：只调用真实处理链，不联网、不 sleep。"""
 
     def __init__(self):
-        super().__init__("测试源", {"enabled": True, "name": "测试源"})
+        super().__init__(
+            "测试源", {"enabled": True, "name": "测试源", "days_limit": 36500}
+        )
 
-    def fetch(self):
+    def fetch(self) -> List[BidItem]:
         return []
 
 
@@ -75,33 +78,24 @@ class TestRegionTagger:
 class TestTaggingNeverFilters:
     """地区只打标，绝不改变结果集（全国数据全量入库）。"""
 
-    def test_region_filter_tag_items_returns_all(self, make_item):
+    def test_process_items_tags_all_relevant_items(self, make_item):
         items = [
-            make_item(title="云南昆明铁塔项目"),
-            make_item(title="山东青岛铁塔项目"),
-            make_item(title="无地区信息的综合服务项目"),
+            make_item(title="中国铁塔昆明基站维护项目", url="https://a.com/x/1", native_id="N1"),
+            make_item(title="山东青岛铁塔项目", url="https://a.com/x/2", native_id="N2"),
+            make_item(title="中国铁塔无地区信息综合服务", url="https://a.com/x/3", native_id="N3"),
         ]
 
-        tagged = RegionFilter().tag_items(items)
+        result = _TaggingCrawler()._process_items(items)
 
-        assert tagged is items and len(tagged) == 3, "地区打标丢弃了条目"
-        assert tagged[0].province == "云南"
-        assert tagged[1].province == "山东"
-        assert tagged[2].province == ""
+        assert len(result) == 3, "地区打标丢弃了条目"
+        by_id = {item.native_id: item for item in result}
+        assert by_id["N1"].province == "云南"
+        assert by_id["N2"].province == "山东"
+        assert by_id["N3"].province == ""
+        assert isinstance(json.loads(by_id["N2"].regions), list)
 
-    def test_region_filter_filter_items_compat_keeps_all(self, make_item):
-        items = [make_item(title="山东青岛铁塔项目"), make_item(title="城市绿化项目")]
-        result = RegionFilter().filter_items(items)
-        assert result is items and len(result) == 2
-
-    def test_base_crawler_filter_by_region_returns_all(self, make_item):
-        items = [
-            make_item(title="云南昆明铁塔项目"),
-            make_item(title="山东青岛铁塔项目"),
-        ]
-
-        result = _TaggingCrawler().filter_by_region(items)
-
-        assert result is items and len(result) == 2
-        assert result[1].province == "山东"
-        assert isinstance(json.loads(result[1].regions), list)
+    def test_unmatched_region_keeps_item(self, make_item):
+        items = [make_item(title="中国铁塔综合服务项目", url="https://a.com/x/9")]
+        result = _TaggingCrawler()._process_items(items)
+        assert len(result) == 1
+        assert result[0].province == ""

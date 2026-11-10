@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # coding=utf-8
-"""本地预览服务（仅 Windows 调试用）+ 静态 HTML 构建薄封装。
+"""本地预览服务（调试用）+ 静态 HTML 构建薄封装。
 
-生成职责已整体移交 ``scripts/bidding_scraper/builder.py``：
-- 删除旧版动态模板、``:315-322`` 公告类型筛选控件；
-- 删除 ``:447,461`` 不安全的未转义直接内联（XSS）；
-- 本文件不再读取 DB 拼 HTML，只转调安全构建器。
+生成职责由 ``scripts/bidding_scraper/builder.py`` 承担：数据经安全内联，
+``file://`` 双击即可离线打开。本文件不再读取 DB 拼 HTML，只转调构建器。
 
 用法::
 
@@ -57,7 +55,7 @@ def build_html(output_path: str = "", days: int = 7) -> str:
     export = Exporter().export(db)
     meta = dict(export["meta"])
     meta["source_health"] = export["source_health"]
-    # days 仅保留参数兼容，历史全量入库后一律全量导出（旧版 limit=100 已修）
+    # days 保留参数兼容；导出始终使用数据库全量历史
     html = builder_build(export["items"], meta)
     validate_html(html, {"items": export["items"]})
 
