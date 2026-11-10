@@ -36,10 +36,9 @@ class YnggzyCrawler(BaseCrawler):
             all_items.extend(items)
             random_delay(3, 6)
         
-        # 网站本身全是云南省信息，无需检查地区
-        filtered_items = self.filter_items(all_items, require_yunnan=False)
-        
-        return filtered_items
+        # 该站点天然全云南，地区只由 BaseCrawler.run() 的处理链统一打标（不过滤）；
+        # 铁塔相关性、下载档位、去重键也在 run() 中统一串接，此处仅做日期过滤。
+        return self.filter_by_date(all_items)
     
     def _fetch_category(self, category: str) -> List[BidItem]:
         """抓取单个分类"""
@@ -115,6 +114,14 @@ class YnggzyCrawler(BaseCrawler):
             # 地区信息
             area = row.get("areaname", "") or row.get("districtname", "")
             
+            # bulletinid 为源站业务主键；云南站点天然全省，地区仍由
+            # BaseCrawler.run() 的处理链统一打标（只打标不过滤）。
+            bid_type_map = {
+                "gcjs": "招标公告",
+                "zfcg": "采购公告",
+                "cqjy": "产权交易",
+            }
+
             return BidItem(
                 title=title,
                 url=url,
@@ -122,6 +129,9 @@ class YnggzyCrawler(BaseCrawler):
                 date=date,
                 source=self.display_name,
                 description=area,
+                native_id=str(bulletin_id or ""),
+                bid_type=bid_type_map.get(category, ""),  # 仅标签，不过滤
+                attachment_url="",                         # 无附件直链，resolver 降级 L4
             )
         
         except Exception as e:

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>铁塔招标信息 · 离线版</title>
+<style>/*__STYLES__*/</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="hero">
+    <h1>铁塔招标信息</h1>
+    <p class="hero-sub">离线优先 · 数据已内联 · 无需联网即可浏览</p>
+    <div class="meta-bar" id="metaBar"></div>
+  </header>
+
+  <section class="panel filters" aria-label="筛选条件">
+    <div class="field">
+      <label for="fRegion">地区</label>
+      <select id="fRegion"><option value="">全部（全国）</option></select>
+    </div>
+    <div class="field">
+      <label for="fDateFrom">起始日期</label>
+      <input type="date" id="fDateFrom">
+    </div>
+    <div class="field">
+      <label for="fDateTo">结束日期</label>
+      <input type="date" id="fDateTo">
+    </div>
+    <div class="field grow">
+      <label for="fTitle">文件名关键字</label>
+      <input type="search" id="fTitle" placeholder="输入标题中的关键词，如：铁塔、昆明">
+    </div>
+    <div class="field actions">
+      <button type="button" id="fReset" class="btn btn-ghost">重置</button>
+    </div>
+  </section>
+
+  <section class="panel stats" id="statsBar" aria-label="统计"></section>
+
+  <div class="notice" id="notice" hidden></div>
+
+  <main id="list" class="list" aria-label="招标信息列表"></main>
+
+  <footer class="footer" id="healthBar" aria-label="数据源状态"></footer>
+
+</div>
+
+<!-- 数据以安全内联 JSON 存放：浏览器不执行它，前端用 JSON.parse(textContent) 读取。
+     所有尖括号与和号已转义，标题里的脚本片段只会显示为文本。 -->
+<script type="application/json" id="DATA">__INLINE_PAYLOAD__</script>
+<script>/*__APP_JS__*/</script>
+</body>
+</html>

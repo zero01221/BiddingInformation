@@ -249,6 +249,18 @@ class CebpubserviceCrawler(BaseCrawler):
                 parts.append(v)
         description = " | ".join(parts) if parts else ""
 
+        # 附件直链：部分记录会带附件字段；缺失时留空，由 DownloadResolver
+        # 诚实降级到 L4，绝不伪造文件。SPA 详情页 URL 同时作为 L3 快照来源。
+        attachment_url = ""
+        for field in ("attachmentUrl", "attachmenturl", "fileUrl", "fileurl", "docUrl"):
+            candidate = str(rec.get(field) or "").strip()
+            if candidate:
+                attachment_url = (
+                    candidate if candidate.startswith("http")
+                    else f"https://ctbpsp.com/{candidate.lstrip('/')}"
+                )
+                break
+
         return BidItem(
             title=title,
             url=url,
@@ -256,6 +268,9 @@ class CebpubserviceCrawler(BaseCrawler):
             source=self.name,
             description=description,
             original_url="",
+            native_id=str(business_id or ""),  # 源站业务主键，去重键优先使用
+            bid_type=business_type or "",      # 仅标签，不过滤
+            attachment_url=attachment_url,
         )
 
     # ------------------------------------------------------------------

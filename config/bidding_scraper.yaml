@@ -1,8 +1,19 @@
-# 招标信息爬虫配置文件
-#python -m scripts.bidding_scraper.main --output output/bidding_feed.xml
-# 过滤关键词配置
+# 招标信息聚合应用配置文件
+#
+# 最终形态（以 docs/ARCHITECTURE.md 裁定为准）：
+#   离线优先的零构建纯静态 HTML + 数据内联，产物为 output/index.html。
+#   数据生产仅在 Windows 端运行；mac 终端不运行本配置，只双击打开产物。
+#
+# 运行入口：
+#   python -m scripts.bidding_scraper.main          # 抓取 → 处理 → 落库 → 导出 → 构建
+#   python -m scripts.bidding_scraper.main --stats  # 查看数据库统计
+#
+# ---------------------------------------------------------------------------
+# 关键词：入库前的铁塔相关性强制校验（relevance.require_core）
+# 地区词表的单一事实源是 config/regions.json，Python 打标与前端下拉共用。
+# ---------------------------------------------------------------------------
 keywords:
-  # 核心关键词 - 标题或描述必须包含其中至少一个
+  # 核心关键词 - 标题或摘要命中任一即视为铁塔相关
   core:
     # 铁塔类型
     - 铁塔
@@ -45,7 +56,7 @@ keywords:
     - 中国铁塔
     - 铁塔能源
     - 铁塔公司
-    # 广播电视/发射设施相关（重点）
+    # 广播电视/发射设施相关
     - 天线塔
     - 广播塔
     - 电视塔
@@ -53,7 +64,7 @@ keywords:
     - 数字电视发射
     - 无线电发射
 
-  # 地区关键词（用于前端筛选）
+  # 云南地区关键词：仅用于前端「云南优先」默认视图，不参与入库过滤
   yunnan:
     - 云南
     - 昆明
@@ -73,73 +84,55 @@ keywords:
     - 怒江
     - 迪庆
 
-# 行业关键词（用于地区+行业组合匹配）
-industry:
-  - 通信
-  - 移动
-  - 联通
-  - 电信
-  - 铁塔
-  - 5G
-  - 4G
-  - 基站
-  - 信号覆盖
-  - 无线通信
+  # 行业关键词：与 core 并列命中即通过相关性校验
+  industry:
+    - 通信
+    - 移动
+    - 联通
+    - 电信
+    - 铁塔
+    - 5G
+    - 4G
+    - 基站
+    - 信号覆盖
+    - 无线通信
 
-# 过滤配置
 filter:
-  # 日期过滤：只保留最近N天的信息（默认7天）
+  # 抓取时只保留最近 N 天的公告；历史库全量保留，不受此值影响
   days_limit: 7
 
-# 数据源配置（3 个可用数据源）
+# ---------------------------------------------------------------------------
+# 相关性：入库前强制校验，必须在 BaseCrawler.run() 中真正串接。
+# 公告类型一律不过滤，bid_type 仅作标签；地区只打标不过滤。
+# ---------------------------------------------------------------------------
+relevance:
+  require_core: true
+
+# ---------------------------------------------------------------------------
+# 数据源：主源 cebpubservice，辅源 chinatowercom / yfbzb，云南优先 ynggzy。
+# 三个休眠源为 P1，复测通过前保持 disabled（见各段「P1 复测结论」）。
+# ---------------------------------------------------------------------------
 sources:
-  # =========================================================================
-  # 中国政府采购网
-  # 网址: https://www.ccgp.gov.cn
-  # 注意: 该网站有严格的反爬机制，已禁用
-  # =========================================================================
   ccgp:
     enabled: false
     name: 中国政府采购网
     search_url: https://search.ccgp.gov.cn/bxsearch
     display_zone: 云南
     zone_id: "53"
-    keywords:
-      - 铁塔
-      - 中国铁塔
-      - 通信铁塔
-      - 塔桅
-      - 广播电视
-      - 发射塔
+    keywords: [铁塔, 中国铁塔, 通信铁塔, 塔桅, 广播电视, 发射塔]
     min_delay: 15
     max_delay: 30
+    # P1 复测结论：本轮离线实施，禁止真实联网，无法验证「严格反爬」是否已缓解；
+    # 保持 disabled。生产端联网复测通过后把 enabled 改为 true 即可启用（实现已完整）。
 
-  # =========================================================================
-  # 中国招标投标公共服务平台
-  # 网站: https://ctbpsp.com (新站 SPA) / http://www.cebpubservice.com (老站)
-  #
-  # API: cebpubservice.com/ctpsp_iiss/searchbusinesstypebeforedooraction/getStringMethod.do
-  # 4 种公告类型：招标公告、开标记录、评标公示、中标公告
-  # 注意：全国数据，地区筛选在前端完成
-  # =========================================================================
   cebpubservice:
     enabled: true
     name: 中国招标投标公共服务平台
     base_url: http://www.cebpubservice.com
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 广播电视
-      - 发射台
-      - 发射塔
+    keywords: [铁塔, 塔桅, 广播电视, 发射台, 发射塔]
     max_pages: 3
     page_size: 20
 
-  # =========================================================================
-  # 中国铁塔电子采购平台
-  # 网址: https://ebid.chinatowercom.cn
-  # 注意：全国数据，地区筛选在前端完成
-  # =========================================================================
   chinatowercom:
     enabled: true
     name: 中国铁塔电子采购平台
@@ -148,90 +141,52 @@ sources:
     api_url: https://ebid.chinatowercom.cn/inteligentsearch/rest/esinteligentsearch/getFullTextDataNew
     category: "003001"
     days_limit: 7
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 广播电视
-      - 发射台
-      - 发射塔
+    keywords: [铁塔, 塔桅, 广播电视, 发射台, 发射塔]
     max_pages: 3
     page_size: 30
 
-  # =========================================================================
-  # 中国铁塔在线商务平台
-  # 网址: https://www.tower.com.cn
-  # 注意: 当前从本网络不可达（连接超时），已禁用
-  # =========================================================================
   tower_com_cn:
     enabled: false
     name: 中国铁塔在线商务平台
     base_url: https://www.tower.com.cn
     search_url: https://www.tower.com.cn/bidding/biddingList
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 广播电视
-      - 发射台
-      - 发射塔
+    keywords: [铁塔, 塔桅, 广播电视, 发射台, 发射塔]
     max_pages: 3
+    # P1 复测结论：原注释记录「连接超时、域名可能迁移」，本轮离线实施无法复测；
+    # 保持 disabled，避免每次运行产生无意义的超时等待。
 
-  # =========================================================================
-  # 通信工程招标投标平台
-  # 网址: https://txzbqy.miit.gov.cn
-  # 注意: Vue.js SPA，公开API端点待逆向，已禁用
-  # =========================================================================
   miit_txzbqy:
     enabled: false
     name: 通信工程招标投标平台
     base_url: https://txzbqy.miit.gov.cn
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 通信塔
-      - 广播电视
-      - 发射台
-      - 发射塔
+    keywords: [铁塔, 塔桅, 通信塔, 广播电视, 发射台, 发射塔]
     max_pages: 3
+    # P1 复测结论：Vue SPA 公开 API 端点仍需逆向且需认证令牌，本轮离线实施无法复测；
+    # 保持 disabled。启用前须在配置中补 search_url 指向真实 REST 端点。
 
-  # =========================================================================
-  # 乙方宝（聚合平台，数据丰富）
-  # 注意：全国数据，地区筛选在前端完成
-  # =========================================================================
   yfbzb:
     enabled: true
     name: 乙方宝
     base_url: https://www.yfbzb.com
     search_url: https://www.yfbzb.com/search/invitedBidSearch
-    keywords:
-      - 铁塔
-      - 塔桅
-      - 广播电视
-      - 发射台
-      - 发射塔
+    keywords: [铁塔, 塔桅, 广播电视, 发射台, 发射塔]
     max_pages: 2
     fetch_detail: false
+    # 0 条结论（离线实施）：历史库该源长期 0 条，成因为搜索页需 Cookie 预热 +
+    # HTTP 468 反爬 / 页面表格结构变化，且 fetch_detail=false 关闭了详情回源。
+    # 本轮不联网，无法判定是否已恢复；保留 enabled 并在 source_health 中如实暴露条数。
+    # 需生产端联网复测（见 docs/使用说明.md「需验证项」）。
 
-  # =========================================================================
-  # 云南省公共资源交易中心
-  # =========================================================================
   ynggzy:
     enabled: true
     name: 云南省公共资源交易中心
     api_url: https://ggzy.yn.gov.cn/ynggfwpt-home-api/jyzyCenter/jyInfo/gcjs/getZbggList
+    # 云南优先：已在 crawlers/__init__.py 导出并在 Pipeline 注册（旧版零注册缺陷已修）。
 
-  # 已废弃/备用
-  chinabidding:
-    enabled: false
-    name: 中国采购与招标网（已禁用）
-
-# 请求配置
 request:
   timeout: 30
   retry_attempts: 3
   retry_delay: 2
-  # 国内代理配置（解决从国外服务器访问政府网站的问题）
-  # proxy: ""  # 取消注释并填写代理地址
-  # 请求间隔（秒）
   delay_between_requests: 8
   delay_between_sources: 20
   user_agents:
@@ -239,47 +194,57 @@ request:
     - Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36
     - Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0
 
-# 数据库配置
 database:
   path: output/bidding_history.db
-  retention_days: 30
+  retention_days: 3650
 
-# =============================================================================
-# 通知配置
-# =============================================================================
-notification:
-  feishu:
-    enabled: true
-    webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/0333ed93-064d-4eb1-84d1-5ee465678ddf"
-  wechat:
-    enabled: false
-    webhook_url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your-webhook-key"
-  dingtalk:
-    enabled: false
-    webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=your-access-token"
+# 清理：默认禁用。即便启用也只按 created_at 清理，绝不按公告日期删除历史。
+cleanup:
+  enabled: false
+  retention_days: 3650
 
-# 定时任务配置
-schedule:
-  push_times:
-    - "08:00"
-  timezone: "Asia/Shanghai"
+# 下载降级 L1~L4：档位与文案为前后端唯一约定，L4 按钮禁用且不得伪造文件。
+download:
+  # 离线优先：默认不联网预取附件/详情页快照；置 true 时才会在生产端抓取并落盘。
+  prefetch: false
+  attachment_enabled: true
+  snapshot_enabled: true
+  attachments_dir: output/attachments
+  snapshots_dir: output/snapshots
+  tiers:
+    L1: 原始文件
+    L2: 源文件副本
+    L3: 原站未提供文件下载，以下为详情页快照
+    L4: 该来源不提供下载，请前往出处查看
 
-# 输出配置
+# 发布：push 失败仅告警不阻断；sync_dir 为国内零成本文件通道（留空则不复制）。
+publish:
+  git_push: true
+  git_remote: origin
+  git_branch: master
+  sync_dir: ""
+
+# 页面新鲜度：数据截至超过 N 天时页面标黄提示，不做任何消息推送。
+offline:
+  stale_days: 2
+
 output:
   rss_file: output/bidding_feed.xml
   rss_title: 铁塔招标信息
   rss_description: 全国铁塔相关招标信息聚合
   rss_link: https://github.com/zero01221/BiddingInformation
-  max_items: 200
+  # 0 表示全量导出，不截断（旧实现 get_all_items(limit=100) 静默丢数据已修）
+  max_items: 0
+  index_file: output/index.html
+  data_file: output/data.json
 
-# 日志配置
 logging:
   level: INFO
   file: output/bidding_scraper.log
   max_size: 10
   backup_count: 5
 
-# 健康检查配置
+# 保留兼容：不再用于「跳过数据源」，仅作运行状态记录参考。
 health_check:
   enabled: true
   failure_threshold: 3

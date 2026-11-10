@@ -1,16 +1,27 @@
 [project]
 name = "irontower-information"
-version = "1.0.0"
-description = "铁塔招标信息聚合工具"
-requires-python = ">=3.8"
+version = "2.0.0"
+description = "铁塔招标信息聚合应用（离线优先的零构建纯静态 HTML + 数据内联）"
+requires-python = ">=3.13"
 dependencies = [
     "requests>=2.28",
-    "PyYAML>=6.0",
+    "PyYAML>=6.0,<7",
     "tenacity>=8.0",
     "beautifulsoup4>=4.12",
     "lxml>=5.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
 [project.scripts]
 bidding-scraper = "scripts.bidding_scraper.main:main"
 serve-web = "scripts.serve_web:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"

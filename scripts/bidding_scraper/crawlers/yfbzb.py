@@ -213,6 +213,12 @@ class YfbzbCrawler(BaseCrawler):
             else:
                 original_url = ""
 
+            # 从详情链接兜底提取业务主键（形如 /invitedBid/123456.html）
+            native_id = ""
+            id_match = re.search(r"/(\d{5,})(?:\.html|/|$)", href or "")
+            if id_match:
+                native_id = id_match.group(1)
+
             return BidItem(
                 title=title,
                 url=original_url or href,
@@ -220,6 +226,9 @@ class YfbzbCrawler(BaseCrawler):
                 date=date,
                 source=self.display_name,
                 description=f"[招标公告] {area}" if area else "[招标公告]",
+                native_id=native_id,
+                bid_type="招标公告",  # 仅标签，不过滤
+                attachment_url="",     # 聚合站无附件直链，由 resolver 降级到 L4
             )
 
         except Exception as e:

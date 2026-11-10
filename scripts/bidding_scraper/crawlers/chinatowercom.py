@@ -257,12 +257,26 @@ class ChinaTowerComCrawler(BaseCrawler):
             if description:
                 description = re.sub(r'<[^>]+>', '', str(description)).strip()
 
+            # 源站业务主键 infoid：去重键优先使用它，避免 URL 变体造成重复
+            native_id = str(record.get("infoid", "") or record.get("INFOID", "") or "")
+
+            # 附件直链（若接口返回）：缺失则留空，由 resolver 降级到 L4
+            attachment_url = ""
+            for field in ("attachmentUrl", "fileUrl", "fileurl", "attachUrl", "url"):
+                candidate = str(record.get(field) or "").strip()
+                if candidate and candidate.startswith("http") and candidate != url:
+                    attachment_url = candidate
+                    break
+
             return BidItem(
                 title=title_clean,
                 url=url,
                 date=date_obj.strftime("%Y-%m-%d"),
                 source=self.name,
                 description=f"[采购公告] {description[:500]}" if description else "[采购公告]",
+                native_id=native_id,
+                bid_type="采购公告",  # 仅标签，不过滤
+                attachment_url=attachment_url,
             )
         except Exception as e:
             logger.error(f"[{self.name}] 解析记录失败: {e}")

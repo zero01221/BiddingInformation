@@ -1,5 +1,16 @@
 # coding=utf-8
-"""招标信息爬虫主入口"""
+"""招标信息聚合应用主入口（CLI 薄层）。
+
+用法::
+
+    python -m scripts.bidding_scraper.main                 # 抓取 → 处理 → 落库 → 导出 → 构建
+    python -m scripts.bidding_scraper.main --no-crawl      # 离线重建：只用现有 DB 重建产物
+    python -m scripts.bidding_scraper.main --stats         # 数据库统计
+    python -m scripts.bidding_scraper.main --list --days 7
+    python -m scripts.bidding_scraper.main --dry-run       # 只打印，不写产物
+
+旧版通知分支（原 :117-162）已彻底删除：本期不做任何消息推送，信息只在页面呈现。
+"""
 
 import argparse
 import sys
@@ -13,174 +24,130 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
         import io
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-from .config import Config
-from .database import Database
-from .logger import get_logger
 from .base_crawler import CrawlerManager
+from .config import Config
 from .crawlers import (
     CcgpCrawler,
     CebpubserviceCrawler,
     ChinaTowerComCrawler,
-    TowerComCnCrawler,
     MiitTxzbqyCrawler,
+    TowerComCnCrawler,
     YfbzbCrawler,
+    YnggzyCrawler,
 )
+from .database import Database
+from .logger import get_logger
 from .output import OutputFormatter
-from .notification import NotifierFactory
+from .pipeline import BuildResult, Pipeline
 
 logger = get_logger(__name__)
 
+# 配置键 → 爬虫类。旧实现 6 个分支且缺 ynggzy，导致云南源零注册。
+_CRAWLER_CLASSES = {
+    "ccgp": CcgpCrawler,
+    "cebpubservice": CebpubserviceCrawler,
+    "chinatowercom": ChinaTowerComCrawler,
+    "tower_com_cn": TowerComCnCrawler,
+    "miit_txzbqy": MiitTxzbqyCrawler,
+    "yfbzb": YfbzbCrawler,
+    "ynggzy": YnggzyCrawler,
+}
+
 
 def create_crawler_manager() -> CrawlerManager:
-    """创建爬虫管理器"""
+    """按配置装配所有已启用的数据源爬虫（含云南源 ynggzy）。"""
     config = Config.get_instance()
     manager = CrawlerManager()
-    
     sources = config.get_enabled_sources()
-    
-    # 注册各数据源爬虫
-    if "ccgp" in sources:
-        manager.register(CcgpCrawler(sources["ccgp"]))
 
-    if "cebpubservice" in sources:
-        manager.register(CebpubserviceCrawler(sources["cebpubservice"]))
-    
-    if "chinatowercom" in sources:
-        manager.register(ChinaTowerComCrawler(sources["chinatowercom"]))
-    
-    if "tower_com_cn" in sources:
-        manager.register(TowerComCnCrawler(sources["tower_com_cn"]))
-    
-    if "miit_txzbqy" in sources:
-        manager.register(MiitTxzbqyCrawler(sources["miit_txzbqy"]))
+    for source_name, crawler_class in _CRAWLER_CLASSES.items():
+        source_config = sources.get(source_name)
+        if source_config:
+            manager.register(crawler_class(source_config))
 
-    if "yfbzb" in sources:
-        manager.register(YfbzbCrawler(sources["yfbzb"]))
-
+    logger.info(f"已注册 {len(manager.crawlers)} 个数据源: {', '.join(sources.keys())}")
     return manager
 
 
-def main():
-    """主函数"""
-    #python -m scripts.bidding_scraper.main
-    parser = argparse.ArgumentParser(description="招标信息爬虫 - 生成 RSS feed")
-    parser.add_argument("--output", "-o", help="输出文件路径")
-    parser.add_argument("--dry-run", "-n", action="store_true", help="只打印结果，不写文件")
+def _print_stats() -> None:
+    """打印数据库统计信息。"""
+    stats = Database().get_stats()
+    print("\n数据库统计:")
+    print(f"  总记录数: {stats['total']}")
+    print(f"  最近7天新增: {stats['recent_week']}")
+    print("  按来源统计:")
+    for source, count in stats["by_source"].items():
+        print(f"    {source}: {count}")
+    print(f"  数据库路径: {stats['db_path']}")
+
+
+def _print_list(days: int) -> None:
+    """打印最近 N 天记录（只读，不触发爬虫）。"""
+    items = Database().get_recent_items(days)
+    formatter = OutputFormatter()
+    if not items:
+        print(f"\n数据库中没有最近 {days} 天的记录")
+    else:
+        formatter.print_summary(items)
+
+
+def _print_result(result: BuildResult) -> None:
+    """打印一次构建的摘要。"""
+    print("\n" + "=" * 56)
+    print("  构建结果")
+    print("=" * 56)
+    print(f"  状态: {'成功' if result.success else '失败（已保留上一版产物）'}")
+    print(f"  导出条数: {result.items_count}")
+    print(f"  本次新增: {result.new_count}")
+    print(f"  数据截至: {result.data_as_of or '（无）'}")
+    print(f"  生成时间: {result.generated_at}")
+    print(f"  首页产物: {result.index_path}")
+    print(f"  数据产物: {result.data_path}")
+    print(f"  数据源健康: {len(result.source_health)} 个源")
+    for health in result.source_health:
+        print(f"    - {health.get('source', health.get('name', '?'))}: {health.get('item_count', 0)} 条")
+    for error in result.errors:
+        print(f"  [告警] {error}")
+    print("=" * 56 + "\n")
+
+
+def main() -> None:
+    """CLI 主函数。"""
+    parser = argparse.ArgumentParser(
+        description="铁塔招标信息聚合 - 生成离线优先的纯静态 HTML 产物"
+    )
+    parser.add_argument("--output", "-o", help="RSS 输出文件路径（覆盖配置）")
+    parser.add_argument("--dry-run", "-n", action="store_true", help="只打印结果，不写产物")
     parser.add_argument("--config", "-c", help="配置文件路径")
     parser.add_argument("--stats", action="store_true", help="显示数据库统计信息")
-    parser.add_argument("--list", action="store_true", help="列出数据库中的招标信息（不触发爬虫）")
-    parser.add_argument("--days", "-d", type=int, default=30, help="--list 时显示最近N天的记录（默认30）")
-    
+    parser.add_argument("--list", action="store_true", help="列出最近记录（不触发爬虫）")
+    parser.add_argument("--days", "-d", type=int, default=30, help="--list 时的天数（默认 30）")
+    parser.add_argument(
+        "--no-crawl", action="store_true",
+        help="跳过联网抓取，仅用现有数据库重建产物（离线验证用）",
+    )
     args = parser.parse_args()
-    
-    # 加载配置
+
     Config.load(args.config)
-    config = Config.get_instance()
-    
-    # 初始化数据库
-    db = Database()
-    
-    # 显示统计信息
+
     if args.stats:
-        stats = db.get_stats()
-        print("\n数据库统计:")
-        print(f"  总记录数: {stats['total']}")
-        print(f"  最近7天新增: {stats['recent_week']}")
-        print(f"  按来源统计:")
-        for source, count in stats['by_source'].items():
-            print(f"    {source}: {count}")
-        print(f"  数据库路径: {stats['db_path']}")
+        _print_stats()
         return
-
-    # 列出数据库内容（不触发爬虫）
     if args.list:
-        days = args.days
-        items = db.get_recent_items(days)
-        formatter = OutputFormatter()
-        if not items:
-            print(f"\n数据库中没有最近 {days} 天的记录")
-        else:
-            formatter.print_summary(items)
-        return
-    
-    # 创建爬虫管理器
-    manager = create_crawler_manager()
-    
-    # 健康检查
-    if config.get_bool("health_check.enabled", True):
-        if not manager.health_check():
-            logger.warning("没有健康的数据源")
-    
-    # 运行所有爬虫
-    all_items = manager.run_all()
-
-    # 初始化通知工厂（用于有/无数据时都发送通知）
-    notification_config = config.get_notification_config()
-    notifier_factory = NotifierFactory(notification_config) if notification_config else None
-
-    if not all_items:
-        logger.info("未找到任何招标信息")
-        # 发送"今天没有新消息"通知
-        if notifier_factory:
-            enabled_notifiers = notifier_factory.get_enabled_notifiers()
-            if enabled_notifiers:
-                logger.info(f"发送空结果通知到: {', '.join(enabled_notifiers)}")
-                results = notifier_factory.send_text_all("今天没有新消息")
-                for notifier_name, success in results.items():
-                    status = "成功" if success else "失败"
-                    logger.info(f"  {notifier_name}: {status}")
+        _print_list(args.days)
         return
 
-    # 去重（使用数据库）
-    existing_ids = db.get_item_ids()
-    new_items = [item for item in all_items if item.item_id not in existing_ids]
+    pipeline = Pipeline()
+    result = pipeline.run(
+        crawl=not args.no_crawl,
+        write_artifacts=not args.dry_run,
+        rss=not args.dry_run,
+        rss_path=args.output,
+    )
+    _print_result(result)
 
-    if new_items:
-        # 保存新项目到数据库
-        saved_count = db.save_items(new_items)
-        logger.info(f"新增 {saved_count} 条招标信息")
-
-        # 发送通知
-        if notifier_factory:
-            enabled_notifiers = notifier_factory.get_enabled_notifiers()
-            if enabled_notifiers:
-                logger.info(f"发送通知到: {', '.join(enabled_notifiers)}")
-                results = notifier_factory.send_all(new_items)
-                for notifier_name, success in results.items():
-                    status = "成功" if success else "失败"
-                    logger.info(f"  {notifier_name}: {status}")
-    else:
-        # 抓取到了数据但都是已存在的，也发送"今天没有新消息"
-        logger.info("没有新的招标信息（所有数据已存在）")
-        if notifier_factory:
-            enabled_notifiers = notifier_factory.get_enabled_notifiers()
-            if enabled_notifiers:
-                logger.info(f"发送空结果通知到: {', '.join(enabled_notifiers)}")
-                results = notifier_factory.send_text_all("今天没有新消息")
-                for notifier_name, success in results.items():
-                    status = "成功" if success else "失败"
-                    logger.info(f"  {notifier_name}: {status}")
-    
-    # 获取所有历史记录（用于RSS输出）
-    all_history_items = db.get_all_items()
-    
-    # 输出结果
-    formatter = OutputFormatter()
-    
-    if args.dry_run:
-        formatter.print_summary(all_history_items)
-    else:
-        formatter.save_rss(all_history_items, args.output)
-        formatter.print_summary(all_history_items)
-    
-    # 清理过期数据
-    db.cleanup_old_items()
-    
-    # 显示爬虫状态
-    logger.info("\n数据源状态:")
-    for status in manager.get_status():
-        health = "✓" if status["healthy"] else "✗"
-        logger.info(f"  [{health}] {status['name']}: {status['total_items']} 条")
+    if not result.success:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

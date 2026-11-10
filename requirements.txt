@@ -1,6 +1,9 @@
-requests
-pytz
-PyYAML==6.0.3
-tenacity==8.5.0
-beautifulsoup4==4.12.3
-lxml==5.3.0
+# 运行时依赖（仅 Windows 生产端需要；mac 终端零依赖，只打开 output/index.html）
+# 说明：pytz 已确认全仓零引用，本轮移除；原 requirements.txt:2。
+requests>=2.28
+PyYAML>=6.0,<7
+tenacity>=8.0
+beautifulsoup4>=4.12
+lxml>=5.0
+
+# 开发/测试依赖不写入运行时清单，请用：pip install -e ".[dev]"（见 pyproject.toml）

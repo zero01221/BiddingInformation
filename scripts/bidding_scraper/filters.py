@@ -1,122 +1,117 @@
 # coding=utf-8
-"""过滤器模块 - 负责筛选云南地区铁塔相关招标信息"""
+"""过滤器兼容层。
+
+历史缺陷：本模块原把 ``require_yunnan`` 默认设为 True，会砍掉全部全国数据，且活跃源
+零调用。新实现把「相关性」委托给 :mod:`relevance`、「地区」委托给
+:mod:`region_tagger`——**相关性强制校验、地区只打标不过滤**。
+处理链真正串接发生在 :meth:`base_crawler.BaseCrawler.run`，本模块保留旧类名
+仅为兼容既有导入，不再承担默认过滤职责。
+"""
 
 from typing import List, Optional
 
 from .config import Config
 from .logger import get_logger
 from .models import BidItem
+from .region_tagger import RegionTagger
+from .relevance import RelevanceFilter
 from .utils import contains_any
 
 logger = get_logger(__name__)
 
 
 class BidFilter:
-    """招标信息过滤器"""
-    
-    def __init__(self):
-        """初始化过滤器"""
+    """铁塔相关性过滤器（薄适配层）。"""
+
+    def __init__(self) -> None:
         config = Config.get_instance()
         self.core_keywords = config.get_core_keywords()
         self.yunnan_keywords = config.get_yunnan_keywords()
         self.industry_keywords = config.get_industry_keywords()
-    
+        self._relevance = RelevanceFilter()
+
     def should_include(
         self,
         title: str,
         description: str = "",
-        require_yunnan: bool = True,
+        require_core: bool = True,
+        require_yunnan: bool = False,
     ) -> bool:
-        """
-        判断是否应该包含该招标信息
-        
+        """判断是否应入库。
+
         Args:
-            title: 标题
-            description: 描述/摘要
-            require_yunnan: 是否要求包含云南地区信息
-        
+            title: 标题。
+            description: 摘要。
+            require_core: 是否强制校验 core/industry（默认 True）。
+            require_yunnan: **已废弃**，保留仅为兼容旧签名；地区只打标不过滤，
+                传入 True 也不会据此丢弃条目（避免砍掉全国数据）。
+
         Returns:
-            是否应该包含
+            True 表示通过相关性校验。
         """
-        text = f"{title} {description}".lower()
-        
-        # 检查核心关键词
-        has_core = contains_any(text, self.core_keywords)
-        
-        if not has_core:
-            # 检查地区+行业组合
-            has_yunnan = contains_any(text, self.yunnan_keywords)
-            has_industry = contains_any(text, self.industry_keywords)
-            if not (has_yunnan and has_industry):
-                return False
-        
-        # 检查地区
         if require_yunnan:
-            if not contains_any(text, self.yunnan_keywords):
-                return False
-        
-        return True
-    
+            logger.debug("require_yunnan 已废弃：地区只打标不过滤，参数被忽略")
+        return self._relevance.is_relevant(title, description) if require_core else True
+
     def filter_items(
         self,
         items: List[BidItem],
-        require_yunnan: bool = True,
+        require_core: bool = True,
+        require_yunnan: bool = False,
     ) -> List[BidItem]:
-        """
-        过滤招标信息列表
-        
-        Args:
-            items: 招标信息列表
-            require_yunnan: 是否要求包含云南地区信息
-        
-        Returns:
-            过滤后的列表
-        """
-        filtered = []
-        for item in items:
-            if self.should_include(item.title, item.description, require_yunnan):
-                filtered.append(item)
-        
-        logger.debug(f"过滤: {len(items)} -> {len(filtered)} 条")
+        """按相关性过滤列表（地区不过滤）。"""
+        filtered = [
+            item for item in items
+            if self.should_include(
+                item.title, item.description, require_core, require_yunnan
+            )
+        ]
+        logger.debug(f"相关性过滤: {len(items)} -> {len(filtered)} 条")
         return filtered
-    
+
     def extract_region(self, text: str) -> Optional[str]:
-        """从文本中提取云南地区信息"""
+        """从文本中提取云南地区词（仅打标用）。"""
         return self._extract_region(text, self.yunnan_keywords)
-    
-    def _extract_region(self, text: str, keywords: List[str]) -> Optional[str]:
-        """从文本中提取地区信息"""
+
+    @staticmethod
+    def _extract_region(text: str, keywords: List[str]) -> Optional[str]:
+        """返回文本中首个命中的地区词。"""
         if not text:
             return None
-        
-        # 优先匹配州市名称
         for kw in keywords:
-            if kw in text:
+            if kw and kw in text:
                 return kw
-        
         return None
 
 
 class RegionFilter:
-    """地区过滤器 - 用于全国性网站的数据过滤"""
-    
-    def __init__(self):
-        """初始化地区过滤器"""
-        config = Config.get_instance()
-        self.yunnan_keywords = config.get_yunnan_keywords()
-    
+    """地区打标器（原「地区过滤器」，已改为只打标不丢弃）。"""
+
+    def __init__(self) -> None:
+        self._tagger = RegionTagger()
+        self.yunnan_keywords = Config.get_instance().get_yunnan_keywords()
+
     def is_yunnan(self, text: str) -> bool:
-        """检查文本是否包含云南地区信息"""
-        return contains_any(text, self.yunnan_keywords)
-    
-    def filter_items(self, items: List[BidItem]) -> List[BidItem]:
-        """过滤出云南地区的招标信息"""
-        filtered = []
+        """仅判断文本是否含云南地区词，不改变结果集。"""
+        return contains_any(text or "", self.yunnan_keywords)
+
+    def tag(self, title: str, description: str = ""):
+        """返回地区打标结果（``Region``，含 province/city/regions）。"""
+        return self._tagger.tag(title, description)
+
+    def tag_items(self, items: List[BidItem]) -> List[BidItem]:
+        """给每条打标并**原样返回全部**条目，绝不过滤。"""
+        import json
+
         for item in items:
-            # 检查标题、描述、地区信息
-            text = f"{item.title} {item.description}"
-            if self.is_yunnan(text):
-                filtered.append(item)
-        
-        logger.debug(f"地区过滤: {len(items)} -> {len(filtered)} 条")
-        return filtered
+            region = self._tagger.tag(item.title, item.description)
+            item.province = region.province
+            item.city = region.city
+            item.regions = json.dumps(region.regions, ensure_ascii=False)
+        logger.debug(f"地区打标: {len(items)} 条（0 条被丢弃）")
+        return items
+
+    def filter_items(self, items: List[BidItem]) -> List[BidItem]:
+        """兼容旧签名：实际执行打标，返回全部条目（不丢弃任何数据）。"""
+        logger.debug("RegionFilter.filter_items 已改语义：只打标不过滤")
+        return self.tag_items(items)

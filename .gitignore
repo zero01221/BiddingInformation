@@ -54,6 +54,12 @@ output.log
 *.log.*
 logs/
 
+# 本项目产物约定（见 docs/ARCHITECTURE.md §8）
+# 以下三类为运行期生成物，忽略；output/*.db / index.html / data.json 必须入库。
+output/*.log
+output/snapshots/
+output/attachments/
+
 # 视频文件
 *.mp4
 *.avi
@@ -85,7 +91,6 @@ logs/
 *.xls
 *.ppt
 *.pptx
-*.xlsx
 *.csv
 
 # Preview files
