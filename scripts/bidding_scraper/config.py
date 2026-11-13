@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 def resolve_project_path(path: str) -> Path:
     """把配置里的相对路径解析为以项目根为基准的绝对路径。
 
-    避免产物位置依赖进程当前工作目录（Windows 任务计划触发时 CWD 不固定）。
+    避免产物位置依赖进程当前工作目录（.command 双击或计划任务触发时 CWD 不固定）。
     """
     candidate = Path(path)
     return candidate if candidate.is_absolute() else PROJECT_ROOT / candidate
@@ -210,9 +210,13 @@ class Config:
         }
 
     def get_publish_config(self) -> Dict[str, Any]:
-        """发布配置：git push 与国内同步目录。push 失败仅告警，不阻断产物。"""
+        """发布配置（兼容保留）。
+
+        mac 本地闭环不使用推送/同步通道：这些键只为可选的 Windows 备用入口保留，
+        编排层不会据此触发任何发布动作，产物生成与发布完全解耦。
+        """
         return {
-            "git_push": self.get_bool("publish.git_push", True),
+            "git_push": self.get_bool("publish.git_push", False),
             "git_remote": self.get("publish.git_remote", "origin"),
             "git_branch": self.get("publish.git_branch", "master"),
             "sync_dir": self.get("publish.sync_dir", "") or "",
@@ -271,7 +275,7 @@ class Config:
             "database": {"path": "output/bidding_history.db", "retention_days": 3650},
             "cleanup": {"enabled": False, "retention_days": 3650},
             "download": {"prefetch": False, "attachment_enabled": True, "snapshot_enabled": True},
-            "publish": {"git_push": True, "git_remote": "origin", "git_branch": "master", "sync_dir": ""},
+            "publish": {"git_push": False, "git_remote": "origin", "git_branch": "master", "sync_dir": ""},
             "offline": {"stale_days": 2},
             "output": {
                 "rss_file": "output/bidding_feed.xml",

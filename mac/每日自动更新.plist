@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  铁塔招标信息 · macOS 每日自动更新模板（可选增强，默认不安装、不启用）
+  {{PROJECT_DIR}} 由「安装每日更新.command」替换为本仓库的真实绝对路径，
+  再复制到 ~/Library/LaunchAgents/com.biddinginformation.dailyupdate.plist。
+  任务只在同一台 mac 上调用「更新数据.command」，不依赖第二台机器或在线托管。
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.biddinginformation.dailyupdate</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{PROJECT_DIR}}/更新数据.command</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{{PROJECT_DIR}}</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>{{PROJECT_DIR}}/output/launchd.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>{{PROJECT_DIR}}/output/launchd.err.log</string>
+</dict>
+</plist>

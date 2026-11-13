@@ -443,7 +443,7 @@
     var age = asOf ? daysSince(asOf) : 0;
     if (age > STALE_DAYS) {
       showNotice('数据截至 ' + asOf + '，已超过 ' + STALE_DAYS +
-        ' 天未更新。请在 Windows 端运行 update.bat，并重新获取本文件覆盖。', 'warn');
+        ' 天未更新。请双击「更新数据」后刷新本页。', 'warn');
     }
   }
 
@@ -570,7 +570,7 @@
       var notice = document.getElementById('notice');
       if (notice.hidden) {
         showNotice('页面已恢复显示 · 数据截至 ' + safeValue(META.data_as_of, '未知') +
-          '。离线文件不会自动更新，如需最新数据请用抓取端重新生成并覆盖本文件。', 'info');
+          '。离线文件不会自动更新，如需最新数据请双击「更新数据」后刷新本页。', 'info');
       }
     });
   }

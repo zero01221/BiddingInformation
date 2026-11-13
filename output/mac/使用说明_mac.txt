@@ -1,16 +1,31 @@
-铁塔招标信息 · macOS 离线使用说明
+铁塔招标信息 · macOS 本机使用说明
 ========================================
 
+【本版是「一台 mac 本地闭环」】
+  抓取、落库、生成、查看，全部只在这一台 mac 上完成：
+  不需要 Windows 生产机、不需要同步盘、不需要第二台电脑、不需要 VPN。
+  唯一允许安装的是「一点简单环境」（Python 3 + requirements.txt），且只需装一次。
+
+【两条命令，职责分离】
+  1) 更新数据.command   双击 → 抓取并生成 output/index.html 等全部产物（唯一会写数据的入口）
+  2) 查询.command       双击 → 只用系统自带 open 打开页面，零依赖、不抓取、不联网、不改数据
+  · 打开_mac.command 是「查询.command」的兼容别名，内容等价，给旧书签用。
+  · 首次使用：先双击「安装环境.command」创建 .venv 并装依赖（只需一次），
+    之后每天重复「更新数据 → 查询」这一对即可。
+
 【最简单的用法（推荐，零依赖）】
-  直接双击「铁塔招标信息.html」，或双击仓库根目录 output/index.html。
+  直接双击本目录的「铁塔招标信息.html」，或双击仓库根目录 output/index.html。
   用 Safari 或 Chrome 打开即可，页面数据已全部内嵌在 HTML 里：
   不需要 Python、Node、Homebrew，不需要联网，不需要 VPN，不需要任何构建步骤。
+  只想看现有数据？这一条路径完全不用装环境、不用跑任何 .command。
 
-【一键打开脚本（可选）】
-  仓库根目录有「打开_mac.command」，双击它会执行 open ./output/index.html。
-  · 首次使用可能需要在终端执行一次：chmod +x 打开_mac.command
-  · 若被 Gatekeeper 拦截：在 Finder 里右键该文件 → 「打开」→ 再点「打开」。
-  · 它不调用 Python、不联网、不修改任何数据；最稳妥的方式仍是直接双击 HTML。
+【首次运行 .command 的提示】
+  · 提示没有权限：在「终端」执行一次 chmod +x *.command
+  · 被 Gatekeeper 拦截：Finder 里右键该文件 → 「打开」→ 再点「打开」。
+  · 窗口结束时停在「按任意键关闭窗口…」，按任意键关闭。
+  · 所有 .command 均为 UTF-8 无 BOM、LF 换行（由 .gitattributes 固定），
+    克隆到 mac 后不会出现 bad interpreter。
+  · 依赖缺失时「更新数据」会打印可操作的中文指引，不会静默失败。
 
 【关于 file:// 限制】
   本页数据已内联，不通过 fetch 读取 data.json，因此 Safari/Chrome 以 file://
@@ -25,31 +40,38 @@
   · 公告类型只是标签，不参与筛选；所有类型公告都收录。
   · 顶部显示「数据更新时间 / 数据截至」，超过 2 天未更新会标黄提示。
 
-【macOS 下载行为（与 Windows 不同，这是有意的版本区分）】
-  Safari 对 download 属性的支持与 Chrome/Edge 有差异，因此本页在 macOS 上
+【macOS 下载行为（与 Windows 不同，这是有意的兼容处理）】
+  Safari 对 download 属性的支持与 Chrome 有差异，因此本页在 macOS 上
   点击「下载源招标文件」会先在新标签打开目标文件，并给出明确的「另存为」引导：
     菜单栏「文件 → 存储为…」，文件名用提示里给出的中文名（UTF-8，不会乱码）。
   这样不会出现「点了没反应」或静默失败。若浏览器拦截了新标签，请允许弹出窗口，
   或改用「跳转出处」到原站查看。
-  提示中的 UTF-8 filename*（RFC 5987）编码供在线部署时设置下载头使用。
+  提示中的 UTF-8 filename*（RFC 5987）编码供将来在线部署时设置下载头使用。
 
 【下载档位说明】
   L1 原始文件     原站附件直链
-  L2 源文件副本   应用侧预存副本（output/attachments/）
-  L3 详情页快照   原站无下载时提供快照（output/snapshots/），页面会明确说明
+  L2 源文件副本   应用侧预存副本（../attachments/）
+  L3 详情页快照   原站无下载时提供快照（../snapshots/），页面会明确说明
   L4 无法下载     按钮禁用并提示「该来源不提供下载，请前往出处查看」，
                   不伪造文件、不产生 404、不静默失败
 
 【每天怎么更新】
-  mac 端不抓取、不生成数据（这是设计，不是限制）。数据只在 Windows 生产端
-  每日由 update.bat 生成，再通过同步盘 / 文件传输 / 局域网 / U 盘把
-  output/ 里的新文件覆盖到本机，刷新浏览器即可看到新数据与新的「数据截至」。
-  若用同步盘，日常 0 步；手动通道每天 1 步（覆盖文件 + 刷新）。
-  终端访问全流程不会请求任何境外在线地址，也不依赖 GitHub Pages。
+  在本机双击「更新数据.command」即可，国内站点 mac 直连可达，抓数不需要 VPN。
+  它会采集 → 落库 → 原子写生成 output/index.html、data.json、RSS 与 win/mac 平台包；
+  失败时保留上一版产物并给出中文提示，不会破坏已有页面。
+  生成后双击「查询.command」，或刷新已打开的页面，就能看到新的「数据截至」。
+
+【可选：每天 08:00 自动更新（默认不启用）】
+  主动双击「安装每日更新.command」才会安装 launchd 定时任务，不装就绝不会自动运行。
+  它把 mac/每日自动更新.plist 里的 {{PROJECT_DIR}} 替换为本机真实绝对路径，
+  生成 ~/Library/LaunchAgents/com.biddinginformation.dailyupdate.plist 并 launchctl load。
+  关闭：launchctl unload -w ~/Library/LaunchAgents/com.biddinginformation.dailyupdate.plist
+        然后删除该 plist 文件。
+  日志：output/launchd.out.log 与 output/launchd.err.log。
 
 【目录里的其它文件】
-  · ../index.html        根目录主页面（与本目录页面数据相同）
-  · ../data.json         分离数据产物（供可选在线部署/调试，页面本身不依赖它）
+  · ../index.html        仓库根目录主页面（与本目录页面数据相同）
+  · ../data.json         分离数据产物（供调试，页面本身不依赖它）
   · ../bidding_feed.xml  RSS 订阅源
   · ../bidding_history.db SQLite 历史库（请保留，不要删除）
 
@@ -57,4 +79,6 @@
   Q：为什么很多条是 L4？
   A：历史数据没有附件直链或快照文件，按规则诚实标注不可用，请点「跳转出处」。
   Q：页面提示「数据已超过 2 天未更新」？
-  A：说明还没拿到最新产物；请从 Windows 端或同步盘重新覆盖 output/index.html。
+  A：请双击「更新数据」后刷新本页，页面顶部「数据截至」会同步变化。
+  Q：提示「缺少运行依赖」？
+  A：双击「安装环境.command」（首次），或按终端提示执行 pip3 install -r requirements.txt。

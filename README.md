@@ -2,7 +2,7 @@
 
 # 铁塔招标信息聚合
 
-**离线优先 · 零安装 · 免翻墙 · Windows / macOS 双击即用**
+**一台 mac 本地闭环 · 更新与查询分离 · 页面零安装 · 免翻墙 · 双击即用**
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg?style=flat-square)](LICENSE)
 
@@ -15,26 +15,53 @@
 一份 **零构建、零框架的纯静态 HTML**（`output/index.html`），数据以安全内联 JSON 嵌在页面里。
 用系统自带浏览器双击打开，即可按地区 / 日期 / 文件名检索铁塔招投标公告、看摘要、跳原文、取源文件。
 
-- `file://` 下**零网络请求**，断网可用；
-- 终端**不需要** Python / Node / 命令行 / 依赖安装，也不需要 VPN 或任何在线托管；
-- 不依赖 GitHub Pages 或任何境外服务；终端访问全流程不请求在线地址；
-- 每天在 Windows 生产端重新生成一次，把 `output/` 里的文件覆盖到终端并刷新即可看到新数据。
+- **本版是 mac 单机方案**：抓取、处理、落库、生成、查看，**全部只在同一台 mac 上完成**；
+- 不需要第二台机器，不需要 Windows 生产机，不需要同步盘，不需要 VPN，不需要 GitHub 在线访问；
+- `file://` 下**零网络请求**，断网可看最近一次数据；
+- 「查询」这一步**零依赖**：不需要 Python / Node / 命令行 / 依赖安装；
+- 只有「更新数据」这一步需要一次性装一点简单环境（Python 3 + `requirements.txt`）。
 
-> 形态与技术选型的最终裁定见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，需求见 [docs/PRD.md](docs/PRD.md)，
-> 分平台图文操作见 [docs/使用说明.md](docs/使用说明.md)。与 PRD 表述不一致处以 ARCHITECTURE 为准。
+> 形态与技术选型见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，需求见 [docs/PRD.md](docs/PRD.md)，
+> 面向用户的图文操作见 [docs/使用说明.md](docs/使用说明.md)。
+> **运行时形态以本文与「使用说明」为准**：架构文档中描述 Windows 生产机 / 同步盘的章节
+> 自本版起仅代表可选备用入口，不再是主流程。
 
 ---
 
-## 快速开始（终端用户，0 安装步骤）
+## 快速开始：三条命令，各司其职
 
-| 平台 | 打开方式 | 说明 |
-| --- | --- | --- |
-| **Windows** | 双击 `output/index.html`，或 `output/win/铁塔招标信息.html` | 推荐 Chrome / Edge |
-| **macOS** | 双击 `output/index.html`，或 `output/mac/铁塔招标信息.html`；也可双击 `打开_mac.command` | Safari / Chrome；本页数据已内联，`file://` 不会触发跨域报错 |
+| 步骤 | 命令（mac 双击） | 频率 | 干什么 | 依赖 |
+| --- | --- | --- | --- | --- |
+| ① 一次性准备 | `安装环境.command` | **仅首次一次** | 创建项目内 `.venv` 并 `pip install -r requirements.txt` | Python 3 |
+| ② **更新数据** | `更新数据.command` | 每天 / 想更新时 | 抓取 → 相关性校验 → 落库 → 生成 `output/index.html` 等全部产物 | ① 的环境 |
+| ③ **查询** | `查询.command` | 随时 | 用默认浏览器打开本地 `output/index.html`，**不抓取、不联网、不改数据** | 零依赖 |
 
-各平台目录内附有中文 `使用说明_win.txt` / `使用说明_mac.txt`，包含首次打开、Gatekeeper、下载行为的说明。
+`打开_mac.command` 是 `查询.command` 的兼容别名，内容等价，保留给旧书签使用。
 
-### 页面功能
+**最省事的用法**：其实 ③ 也可以直接双击 `output/index.html`（或 `output/mac/铁塔招标信息.html`），
+连 `.command` 都不用跑。`file://` 打开即可，数据已内联，不会触发跨域报错。
+
+### 首次运行 `.command` 的提示
+
+- 双击若提示「没有权限」，在「终端」里执行一次 `chmod +x *.command`；
+- 若被 Gatekeeper 拦截，在 Finder 中**右键该文件 → 打开 → 再点「打开」**；
+- 双击后终端窗口会在结束时停留（「按任意键关闭窗口…」），方便看清中文提示。
+
+### 一次性安装环境（用户许可的「一点简单环境」）
+
+mac 自带或可免费安装的 Python 3 即可，二选一：
+
+1. 到 Python 官网 `python.org` 下载 macOS 安装包（`.pkg`），双击安装；
+2. 已装 Homebrew 时，终端执行 `brew install python3`。
+
+然后双击 `安装环境.command`：它会在项目内创建 `.venv/`（已被 `.gitignore` 忽略，不污染系统 Python）
+并安装 `requests / PyYAML / beautifulsoup4 / lxml / tenacity`。
+安装成功后再双击 `更新数据.command` 即可。依赖缺失时 `更新数据.command` 会打印可操作的中文指引，
+**不会静默失败**。
+
+---
+
+## 页面功能
 
 | 功能 | 说明 |
 | --- | --- |
@@ -55,40 +82,48 @@
 | L4 | 连快照也没有 | **按钮禁用**并提示「该来源不提供下载，请前往出处查看」 |
 
 硬规则：L4 不伪造文件、不产生 404、不静默失败；每条的档位与产物 URL 都会持久化并显示在页面上。
-中文文件名按操作系统分支处理：Windows Chrome/Edge 用 `download` 属性；macOS Safari 降级为
-「新标签打开 + 引导另存为」，并给出 UTF-8 文件名与 RFC 5987 编码提示，避免乱码与点了没反应。
+中文文件名按浏览器分支处理：macOS Safari 降级为「新标签打开 + 引导另存为」，
+并给出 UTF-8 文件名与 RFC 5987 编码提示，避免乱码与点了没反应。
 
 ---
 
 ## 数据从哪来、每天怎么更新
 
 ```
-Windows 生产机（任务计划 每日 08:00）
-   └─ update.bat
-        ├─ 抓取 4 个数据源 → 相关性校验 / 地区打标 / 去重 / 下载档位
-        ├─ 落库 SQLite output/bidding_history.db（历史全量保留）
-        ├─ 生成 output/index.html（数据内联）+ data.json + RSS + win/mac 快照包
-        ├─ git push origin master（研发侧版本托管，失败仅告警）
-        └─ 复制 output/ 到国内同步目录（同步盘 / 文件传输 / 局域网 / U 盘）
-                    ↓
-        macOS / Windows 终端覆盖同名文件 → 刷新浏览器（同步盘日常 0 步）
+同一台 mac（本机闭环）
+  ├─ 安装环境.command   一次性：python3 -m venv .venv + 安装 requirements.txt
+  ├─ 更新数据.command   python -m scripts.bidding_scraper.main
+  │     ├─ 抓取 4 个已启用数据源 → 相关性校验 / 地区打标 / 去重 / 下载档位
+  │     ├─ 落库 SQLite output/bidding_history.db（历史全量保留）
+  │     └─ 原子写 output/index.html（数据内联）+ data.json + RSS + win/mac 平台包
+  └─ 查询.command       open ./output/index.html（零依赖，只读）
 ```
 
-- **生产端唯一**：Windows（具备国内网络、Python 依赖与 git 凭据）。**终端 mac 不抓取、不生成、不装环境**。
-- **每日更新**：把 `update.bat` 加入「Windows 任务计划程序」，触发器设为每日 08:00 (Asia/Shanghai)，
-  「起始于」填项目根目录；也可以随时手动双击运行。详见 [docs/使用说明.md](docs/使用说明.md)。
-- **版本托管**：`git push` 只用于研发侧代码/数据托管，与终端入口完全解耦；push 失败**仅告警不阻断**，
-  本地产物与同步目录照常可用。
-- **国内文件通道**：设置环境变量 `BIDDING_SYNC_DIR`（或配置 `publish.sync_dir`）指向同步盘目录，
-  `update.bat` 会自动复制 `output/`；不设置则跳过，手动覆盖文件同样有效。
-- **全失败降级**：产物先写临时文件，校验条数与内联 JSON 合法后才统一替换；异常或所有数据源
-  本次均失败时**保留上一版** `index.html`，页面继续显示「数据截至」历史日期。
+- **两条命令职责分离**：`更新数据.command` 是唯一会联网、会写数据的入口；
+  `查询.command` 只用系统自带 `open`，不调用 Python、不联网、不改数据。
+- **国内站点 mac 直连可达**，抓数不需要 VPN；页面查看全程不需要联网。
+- **不上传、不同步**：主流程不推送到远端仓库、不复制到任何同步目录、不依赖第二台机器。
+  配置 `publish.git_push` 已置为 `false`（键保留仅为兼容可选的 Windows 备用入口）。
+- **全失败降级**：产物先写临时文件，校验条数与内联 JSON 合法后才统一替换；
+  异常或所有数据源本次均失败时**保留上一版** `index.html`，并提示「本次采集失败，已保留上一版产物」。
+
+### 可选：每天 08:00 自动更新（默认不启用）
+
+用户最初的「每天自动更新」诉求保留为**可选增强**，不装就绝不会自动运行：
+
+1. 双击 `安装每日更新.command`；
+2. 它把模板 `mac/每日自动更新.plist` 中的 `{{PROJECT_DIR}}` 替换为本机真实绝对路径，
+   生成 `~/Library/LaunchAgents/com.biddinginformation.dailyupdate.plist` 并 `launchctl load`；
+3. 任务是 `StartCalendarInterval` 每日 08:00、`RunAtLoad=false`，只调用本机的 `更新数据.command`。
+
+关闭：`launchctl unload -w ~/Library/LaunchAgents/com.biddinginformation.dailyupdate.plist` 后删除该文件。
+日志写入 `output/launchd.out.log` / `output/launchd.err.log`（日志文件已忽略入库）。
 
 ### 「数据截至」是什么意思
 
 「数据更新时间」= 本次产物生成时刻；「数据截至」= 库中成功采集的最晚公告日。
-离线 HTML 不会自己变新：想看最新数据，需要从 Windows 端或同步盘重新取一次
-`output/index.html` 覆盖本地文件并刷新。**本期不做任何消息推送**，用户主动打开才看到更新。
+离线 HTML 不会自己变新：想看最新数据，请**双击「更新数据」后刷新本页**。
+本期不做任何消息推送，用户主动打开才看到更新。
 
 ---
 
@@ -99,35 +134,36 @@ Windows 生产机（任务计划 每日 08:00）
 | 主源 P0 | 中国招标投标公共服务平台 `cebpubservice` | 启用 | 全国数据，地区只打标不过滤 |
 | 辅源 P0 | 中国铁塔电子采购平台 `chinatowercom` | 启用 | 历史库 684 条 |
 | 辅源 P0 | 乙方宝 `yfbzb` | 启用 | 历史长期 0 条，成因为反爬/页面结构，**需联网复测**；条数在页面数据源状态中如实可见 |
-| 云南优先 P0 | 云南省公共资源交易中心 `ynggzy` | 启用 | 旧版实现完整但零注册，本版已补 `__init__.py` 导出与注册分支 |
+| 云南优先 P0 | 云南省公共资源交易中心 `ynggzy` | 启用 | 实现完整并已注册 |
 | P1 | `ccgp` / `tower_com_cn` / `miit_txzbqy` | 禁用 | 分别为严格反爬 / 连接超时 / SPA 接口待逆向；本轮离线实施无法复测，保持禁用并写明结论，复测通过后把 `enabled` 改为 `true` 即可启用 |
 
 地区词表单一事实源为 `config/regions.json`（全国省份 + 地州市 + 云南 16 州市），Python 打标与前端下拉共用。
 
 ---
 
-## win / mac 版本区分（用户可感知）
+## 可选备用：Windows 入口
 
-| 维度 | Windows | macOS |
-| --- | --- | --- |
-| 一键入口 | `update.bat`（生产端：抓取+生成+推送+同步复制） | `打开_mac.command`（仅 `open`，零依赖不调用 Python） |
-| 离线包 | `output/win/铁塔招标信息.html` + `使用说明_win.txt` | `output/mac/铁塔招标信息.html` + `使用说明_mac.txt` |
-| 中文名下载 | `<a download>` 直接保存 | Safari 降级新标签 + 引导另存为，附 UTF-8 文件名 |
-| 首次打开 | 直接双击 | `.command` 需 `chmod +x`；Gatekeeper 拦截时「右键 → 打开」；**最稳是直接双击 HTML** |
+**这不是主流程，mac 用户完全可以忽略本节。** `update.bat` 只是保留下来的 Windows 备用入口，
+行为不变；不运行它不影响 mac 本地方案的任何功能。
 
-数据、模板与逻辑完全同源，只是入口与下载行为按平台分支，避免维护两份二进制。
+- 它仍会尝试 `git push origin master`（失败仅告警、不阻断产物）；
+- 它支持环境变量 `BIDDING_SYNC_DIR`（或配置 `publish.sync_dir`）指向同步盘目录，
+  设置后才复制 `output/`；**未设置就跳过复制、不阻断**。`BIDDING_SYNC_DIR` 只属于这个备用入口，
+  mac 本地方案不需要它，也不需要任何同步盘 / 文件传输 / 局域网 / U 盘通道；
+- `output/win/` 目录里保留 Windows 平台的离线包与中文说明，供有需要的 Windows 用户使用。
 
 ---
 
-## 开发 / 维护（仅 Windows 生产端）
+## 开发 / 维护
 
-环境：Python 3.13+。`pip install -r requirements.txt`；开发测试用 `pip install -e ".[dev]"`。
+环境：Python 3.9+（推荐 3.13）。`pip install -r requirements.txt`；开发测试用 `pip install -e ".[dev]"`。
+以下 CLI 与 `更新数据.command` 调用的是同一套跨平台核心逻辑：
 
 ```bash
 # 完整流程：抓取 → 处理 → 落库 → 导出 → 构建（原子写）
 python -m scripts.bidding_scraper.main
 
-# 不联网，只用现有数据库重建全部产物（离线验证）
+# 不联网，只用现有数据库重建全部产物（离线验证，843 条历史无损）
 python -m scripts.bidding_scraper.main --no-crawl
 
 # 只打印不写产物 / 统计 / 列出记录
@@ -135,11 +171,10 @@ python -m scripts.bidding_scraper.main --dry-run
 python -m scripts.bidding_scraper.main --stats
 python -m scripts.bidding_scraper.main --list --days 7
 
-# 静态构建薄封装 / 本地预览（127.0.0.1:8080，仅调试）
-python scripts/serve_web.py --output output/index.html
-python scripts/serve_web.py
+# 本地静态预览（127.0.0.1:8080，可选；file:// 双击才是零依赖基线）
+python scripts/serve_web.py --port 8080
 
-# QA 回归（测试由 QA 阶段独立维护）
+# QA 回归
 pytest
 ```
 
@@ -147,17 +182,19 @@ pytest
 
 ```
 BiddingInformation/
+├── 安装环境.command               # ① 一次性装 Python 依赖到 .venv（mac 双击）
+├── 更新数据.command               # ② 抓取 + 生成全部产物（mac 双击，唯一写数据入口）
+├── 查询.command                   # ③ 只打开 output/index.html（mac 双击，零依赖）
+├── 打开_mac.command               # ③ 的兼容别名（同样零依赖）
+├── 安装每日更新.command           # 可选：安装 launchd 每日 08:00 自动更新
+├── mac/每日自动更新.plist         # launchd 模板，路径用 {{PROJECT_DIR}} 占位
+├── .gitattributes                 # 强制 .command/.sh 为 LF，避免 mac 上 bad interpreter
+├── update.bat                     # 可选备用：Windows 入口（非主流程）
 ├── config/
 │   ├── bidding_scraper.yaml       # 数据源 / 关键词 / 下载档位 / 发布 / 离线策略
 │   └── regions.json               # 全国省份·地州市映射（Python 与前端共用）
 ├── scripts/
-│   ├── bidding_scraper/
-│   │   ├── crawlers/              # 7 个数据源爬虫（4 启用 / 3 休眠）
-│   │   ├── config.py  models.py  database.py  filters.py  base_crawler.py
-│   │   ├── dedup.py  relevance.py  region_tagger.py
-│   │   ├── download_resolver.py  snapshot.py
-│   │   ├── exporter.py  builder.py  pipeline.py  output.py  utils.py  logger.py
-│   │   └── main.py
+│   ├── bidding_scraper/           # 抓取/处理/落库/导出/构建（纯 Python，跨平台）
 │   └── serve_web.py               # 本地预览 / 静态构建薄封装
 ├── web/                           # index.template.html · app.js · styles.css（内联进产物）
 ├── output/
@@ -167,8 +204,6 @@ BiddingInformation/
 │   ├── bidding_history.db         # SQLite 历史库（入库，请勿删除）
 │   ├── win/  mac/                 # 平台专属离线包 + 中文使用说明
 │   └── snapshots/  attachments/   # L2/L3 产物（按 dedup_key 命名，忽略入库）
-├── update.bat                     # Windows 每日更新入口
-├── 打开_mac.command               # macOS 零依赖一键打开
 └── docs/                          # PRD · ARCHITECTURE · 使用说明
 ```
 
@@ -181,7 +216,8 @@ BiddingInformation/
 | `cleanup.enabled` | `false` | **默认禁用**；即便启用也只按 `created_at` 清理，绝不按公告日期删历史 |
 | `download.prefetch` | `false` | 离线优先，默认不联网预取附件与快照 |
 | `download.tiers.L1~L4` | 见配置 | 前后端共用的档位文案 |
-| `publish.sync_dir` | 空 | 国内同步目录；`update.bat` 优先读环境变量 `BIDDING_SYNC_DIR` |
+| `publish.git_push` | `false` | mac 本地闭环不推送；键保留仅为兼容 Windows 备用入口 |
+| `publish.sync_dir` | 空 | 仅 Windows 可选通道；`BIDDING_SYNC_DIR` 亦只属于该备用入口 |
 | `offline.stale_days` | `2` | 数据截至超过该天数页面标黄 |
 | `sources.*.enabled` | — | 数据源开关 |
 
@@ -189,9 +225,9 @@ BiddingInformation/
 
 ## 安全与历史数据
 
-- **通知链路已彻底移除**：配置、代码、脚本与部署 workflow 中的推送逻辑全部删除，
-  仓库不再含明文推送凭据。**安全提醒**：历史 git 提交中曾出现过真实机器人凭据，
-  仅删文件不能撤销泄露，需由仓库所有者在对应平台后台**作废该机器人凭据**。
+- **通知链路已彻底移除**：配置、代码、脚本中的推送逻辑全部删除，仓库不再含明文推送凭据。
+  **安全提醒**：历史 git 提交中曾出现过真实机器人凭据，仅删文件不能撤销泄露，
+  需由仓库所有者在对应平台后台**作废该机器人凭据**。
 - **843 条历史无损保留**：schema 自动迁移时一次性回填 `dedup_key`、地区标签与 `date_valid`，
   并加 `UNIQUE(dedup_key)`；清理默认禁用且只按 `created_at`。
 - **XSS 防护**：内联数据经 `_json_for_script()` 转义 `< > &` 与 U+2028/2029，放在
@@ -201,13 +237,15 @@ BiddingInformation/
 
 ---
 
-## 已知「需验证」项（本轮离线实施未联网）
+## 已知「需验证」项
 
-1. 各源当前可用性（老站 API、聚合站反爬、云南站接口）；
-2. 乙方宝 0 条的确切成因与恢复情况；
-3. 3 个休眠源复测后能否启用；
-4. GitHub 仓库真实写权限（`update.bat` 会尝试 push，失败仅告警）；
-5. 用户最终选择哪一个国内文件通道（不影响任何代码）。
+1. 本机是 Windows 开发机，`.command` 只做了 `bash -n` 语法检查与文本契约校验，
+   **mac 上双击运行、Gatekeeper 放行、launchd 定时触发均需在真实 mac 上验证**；
+2. 各源当前可用性（老站 API、聚合站反爬、云南站接口）与 mac 直连可达性；
+3. 乙方宝 0 条的确切成因与恢复情况；3 个休眠源复测后能否启用；
+4. 官方 Python pkg / Homebrew 安装路径在用户具体 mac 机型上的差异；
+5. `docs/PRD.md` 与 `docs/ARCHITECTURE.md` 仍保留早期跨系统选型的描述，
+   运行时形态以本 README 与 `docs/使用说明.md` 为准。
 
 ---
 

@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+from xml.etree import ElementTree as ET
 
 import pytest
 import yaml
@@ -194,3 +196,125 @@ class TestSecurityGate:
         tracked = proc.stdout.splitlines()
         assert not any("notification/" in name for name in tracked)
         assert not any("deploy.yml" in name for name in tracked)
+
+
+class TestMacLocalSingleMachine:
+    """mac 本地闭环：新增入口的存在性、可执行位、编码、零跨系统、配置与文档契约。"""
+
+    COMMAND_FILES = (
+        "更新数据.command",
+        "安装环境.command",
+        "查询.command",
+        "安装每日更新.command",
+        "打开_mac.command",
+    )
+
+    # 匹配 Windows 盘符绝对路径（如 D:\ 或 D:/），用前置字符排除 https:// 中的 "s:/"。
+    WINDOWS_DRIVE = re.compile(r"(?:^|[^A-Za-z0-9_])[A-Za-z]:[\\/]")
+
+    @staticmethod
+    def _git_mode(project_root, rel):
+        """读取文件在 git 索引中的权限位；尚未纳入索引时返回 None。"""
+        proc = subprocess.run(
+            ["git", "ls-files", "-s", "--", rel], cwd=project_root,
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return None
+        return proc.stdout.split()[0]
+
+    @pytest.mark.parametrize("name", COMMAND_FILES)
+    def test_command_file_exists_and_is_executable(self, project_root, name):
+        path = project_root / name
+        assert path.is_file(), f"缺少 mac 入口：{name}"
+        mode = self._git_mode(project_root, name)
+        if mode is None:
+            # 尚未纳入 git 索引（本地开发中）时，退化为磁盘可执行位检查。
+            assert os.access(path, os.X_OK), f"{name} 缺少可执行位"
+        else:
+            assert mode == "100755", f"{name} 索引权限为 {mode}，应为 100755"
+
+    @pytest.mark.parametrize("name", COMMAND_FILES)
+    def test_command_file_is_utf8_lf_without_bom(self, project_root, name):
+        raw = (project_root / name).read_bytes()
+        assert not raw.startswith(b"\xef\xbb\xbf"), f"{name} 含 UTF-8 BOM"
+        assert b"\r" not in raw, f"{name} 含 CR，macOS bash 会报 bad interpreter"
+        raw.decode("utf-8")  # 必须是合法 UTF-8，否则此处抛异常
+
+    def test_update_command_stays_on_one_mac(self, project_root):
+        text = (project_root / "更新数据.command").read_text(encoding="utf-8")
+        assert 'cd "$(dirname "$0")"' in text
+        assert "-m scripts.bidding_scraper.main" in text
+        assert "pip3 install -r requirements.txt" in text
+        assert "本次采集失败，已保留上一版产物" in text
+        for forbidden in (
+            "git push", "git commit", "git add", "xcopy", "BIDDING_SYNC_DIR",
+        ):
+            assert forbidden not in text, f"更新数据.command 含跨系统动作：{forbidden}"
+        assert not self.WINDOWS_DRIVE.search(text), "更新数据.command 含 Windows 盘符路径"
+
+    @pytest.mark.parametrize("name", ("查询.command", "打开_mac.command"))
+    def test_query_commands_are_read_only(self, project_root, name):
+        text = (project_root / name).read_text(encoding="utf-8")
+        assert 'open "./output/index.html"' in text
+        assert "Gatekeeper" in text and "chmod +x" in text
+        code = "\n".join(
+            line for line in text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ).lower()
+        for forbidden in ("python", "curl", "wget", "pip", "git push"):
+            assert forbidden not in code, f"{name} 可执行行含 {forbidden}"
+
+    def test_install_env_command(self, project_root):
+        text = (project_root / "安装环境.command").read_text(encoding="utf-8")
+        assert ".venv" in text
+        assert "pip install -r requirements.txt" in text
+        assert "python3" in text
+
+    def test_publish_git_push_is_disabled(self, project_root):
+        data = yaml.safe_load(
+            (project_root / "config" / "bidding_scraper.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert data["publish"]["git_push"] is False
+
+    def test_readme_documents_mac_local_loop(self, readme):
+        for token in ("更新数据", "查询", "安装环境"):
+            assert token in readme
+
+    def test_readme_windows_channel_is_optional_only(self, readme):
+        assert "BIDDING_SYNC_DIR" in readme
+        assert "可选备用" in readme
+
+    def test_launchd_plist_is_valid_xml_and_portable(self, project_root):
+        path = project_root / "mac" / "每日自动更新.plist"
+        assert path.is_file()
+        raw = path.read_text(encoding="utf-8")
+        assert "{{PROJECT_DIR}}" in raw
+        assert "更新数据.command" in raw
+        assert not self.WINDOWS_DRIVE.search(raw), "plist 含 Windows 绝对路径"
+
+        root = ET.fromstring(raw)  # 必须是合法 XML
+        assert root.tag == "plist"
+        plist_dict = root.find("dict")
+        assert plist_dict is not None
+        children = list(plist_dict)
+        pairs = {
+            children[i].text: children[i + 1]
+            for i in range(len(children) - 1)
+            if children[i].tag == "key"
+        }
+        assert pairs["Label"].text == "com.biddinginformation.dailyupdate"
+        assert pairs["RunAtLoad"].tag == "false"  # 默认不启用
+        program = pairs["ProgramArguments"].find("string")
+        assert program is not None and "{{PROJECT_DIR}}/更新数据.command" == program.text
+
+    def test_gitattributes_pins_line_endings(self, project_root):
+        """锁定 .command / .plist 为 LF、.bat 为 CRLF，覆盖 core.autocrlf 的机器差异。"""
+        text = (project_root / ".gitattributes").read_text(encoding="utf-8")
+        assert "*.command text eol=lf" in text
+        assert "*.plist text eol=lf" in text
+        # .bat 采用 text+eol=crlf：索引归一化 LF、工作区检出 CRLF，
+        # 既保证 cmd.exe 可解析，又不会像 -text 那样把 CRLF 写进索引产生无关 diff。
+        assert re.search(r"^\*\.bat\s+text eol=crlf\s*$", text, re.MULTILINE) is not None

@@ -1,0 +1,10 @@
+# macOS 双击运行的 .command / .sh 必须保持 LF 换行，否则 /bin/bash 会报 bad interpreter。
+# 显式声明 eol=lf 可覆盖开发者本机 core.autocrlf=true 等设置，
+# 保证在 mac 上克隆出来仍是纯 LF、UTF-8 无 BOM 的可执行脚本。
+*.command text eol=lf
+*.sh text eol=lf
+*.plist text eol=lf
+# .bat 用 text+eol=crlf：索引仍归一化为 LF（不改动已暂存的 update.bat blob），
+# 但任何平台检出到工作区都是 CRLF，cmd.exe 才能稳定解析；-text 会把 CRLF 写进索引、产生无关 diff。
+*.bat text eol=crlf
+.gitattributes text eol=lf

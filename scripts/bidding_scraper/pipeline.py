@@ -5,7 +5,8 @@
 - 产物先写临时文件，经 :func:`builder.validate_html` 校验条数与内联 JSON 后
   才统一 ``os.replace`` 替换，任一步失败都不会写坏正式产物；
 - 构建/校验异常或所有数据源本次均失败时**保留上一版** ``output/index.html``；
-- ``git push`` 与本编排解耦，由 ``update.bat`` 处理且失败仅告警。
+- 产物发布（推送 / 同步）与本编排解耦：mac 本地闭环不使用任何发布通道；
+  可选的 Windows 备用入口若需要发布，由该入口自行处理且失败仅告警。
 """
 
 import json

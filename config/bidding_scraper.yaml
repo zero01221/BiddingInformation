@@ -1,10 +1,12 @@
 # 招标信息聚合应用配置文件
 #
-# 最终形态（以 docs/ARCHITECTURE.md 裁定为准）：
+# 最终形态（选型见 docs/ARCHITECTURE.md，运行时形态以 README.md 为准）：
 #   离线优先的零构建纯静态 HTML + 数据内联，产物为 output/index.html。
-#   数据生产仅在 Windows 端运行；mac 终端不运行本配置，只双击打开产物。
+#   本版为 mac 本地闭环：安装环境.command / 更新数据.command / 查询.command
+#   全部只在同一台 mac 上运行，不依赖第二台机器、同步盘或在线托管。
+#   Windows 仅为可选备用入口，不属于主流程。
 #
-# 运行入口：
+# 运行入口（通常由「更新数据.command」调用，也可手动执行）：
 #   python -m scripts.bidding_scraper.main          # 抓取 → 处理 → 落库 → 导出 → 构建
 #   python -m scripts.bidding_scraper.main --stats  # 查看数据库统计
 #
@@ -197,11 +199,13 @@ download:
     L3: 原站未提供文件下载，以下为详情页快照
     L4: 该来源不提供下载，请前往出处查看
 
-# 发布：push 失败仅告警不阻断；sync_dir 为国内零成本文件通道（留空则不复制）。
+# 发布：mac 本地闭环不做任何远端推送。以下键仅为兼容可选的 Windows 备用入口保留，
+# 编排层不读取它们来决定是否推送；git_push=false 表示本方案完全不触发推送。
 publish:
-  git_push: true
+  git_push: false
   git_remote: origin
   git_branch: master
+  # sync_dir：仅 Windows 可选通道，mac 本地方案不使用；留空则不复制。
   sync_dir: ""
 
 # 页面新鲜度：数据截至超过 N 天时页面标黄提示，不做任何消息推送。
