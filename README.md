@@ -2,7 +2,7 @@
 
 # 铁塔招标信息聚合
 
-**一台 mac 本地闭环 · 更新与查询分离 · 页面零安装 · 免翻墙 · 双击即用**
+**win / mac 两个独立包 · 各自本地闭环 · 更新与查询分离 · 页面零安装 · 免翻墙 · 双击即用**
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg?style=flat-square)](LICENSE)
 
@@ -15,8 +15,9 @@
 一份 **零构建、零框架的纯静态 HTML**（`output/index.html`），数据以安全内联 JSON 嵌在页面里。
 用系统自带浏览器双击打开，即可按地区 / 日期 / 文件名检索铁塔招投标公告、看摘要、跳原文、取源文件。
 
-- **本版是 mac 单机方案**：抓取、处理、落库、生成、查看，**全部只在同一台 mac 上完成**；
-- 不需要第二台机器，不需要 Windows 生产机，不需要同步盘，不需要 VPN，不需要 GitHub 在线访问；
+- **每个包各自单机闭环**：抓取、处理、落库、生成、查看，全部只在同一台电脑上完成；
+- **win 包只含 `.bat`、mac 包只含 `.command`，互不混装**；两套入口职责与名称一一对应；
+- 不需要第二台机器，不需要同步盘，不需要 VPN，不需要 GitHub 在线访问；
 - `file://` 下**零网络请求**，断网可看最近一次数据；
 - 「查询」这一步**零依赖**：不需要 Python / Node / 命令行 / 依赖安装；
 - 只有「更新数据」这一步需要一次性装一点简单环境（Python 3 + `requirements.txt`）。
@@ -27,6 +28,24 @@
 > 自本版起仅代表可选备用入口，不再是主流程。
 
 ---
+
+## 两个分发包（免安装，解压即用）
+
+`packages/` 下有两个自包含压缩包，任选一个下载即可，**不需要安装程序、不需要配置环境变量**：
+
+| 包 | 适用 | 内含入口 | 不含 |
+| --- | --- | --- | --- |
+| `BiddingInformation-win.zip` | Windows | `安装环境.bat` / `更新数据.bat` / `查询.bat` / `环境自检.bat` / `试抓测试.bat` / `update.bat`(备用) | 任何 `.command` |
+| `BiddingInformation-mac.zip` | macOS | `安装环境.command` / `更新数据.command` / `查询.command` / `环境自检.command` / `试抓测试.command` / `安装每日更新.command` / plist | 任何 `.bat` |
+
+两个包都含同一套跨平台 Python 核心、`config/`、`web/`、预生成的 `output/index.html`（数据已内联）、
+`data.json`、RSS 与完整历史库 `bidding_history.db`，以及平台专属中文使用说明。
+解压后**直接双击 `output/index.html` 就能看数据**，连 Python 都不用装；只有「更新数据」才需要一次性装环境。
+
+重新生成两个包（维护用）：`python scripts/build_packages.py`，脚本会校验包内文件、
+可执行位、LF 行尾、零外部请求与内联数据条数。
+
+> Windows 若用系统自带解压后中文文件名乱码，改用 7-Zip / Bandizip / WinRAR 解压即可。
 
 ## 快速开始：三条命令，各司其职
 
@@ -154,6 +173,27 @@ mac 自带或可免费安装的 Python 3 即可，二选一：
 
 ---
 
+## 验证这台电脑能否正常抓取
+
+两个包各带两条**只读**自检命令，不写数据库、不写任何产物，可反复运行：
+
+| 命令 | 检查内容 | 耗时 |
+| --- | --- | --- |
+| `环境自检.bat` / `环境自检.command` | Python 版本、五个依赖、配置、历史库、内联产物、每个启用源的 HTTP 连通性、是否挂了代理 | 秒级 |
+| `试抓测试.bat` / `试抓测试.command` | 在上面基础上**逐源真实联网试抓**，报告每源取回条数与错误 | 数分钟 |
+
+命令行等价写法（两边相同）：
+
+```bash
+python -m scripts.bidding_scraper.doctor           # 环境 + 连通性
+python -m scripts.bidding_scraper.doctor --probe    # 追加逐源真实试抓
+```
+
+输出每项标注 `[通过]` / `[失败]` / `[注意]`，末尾给出「能否正常抓取」结论。
+单个源返回 0 条不影响其它源，页面仍可用历史数据；正式写入请改用「更新数据」。
+**注意**：本机是通过代理访问外网的 Windows，自检结论只证明「这套 Python 链路 + 站点响应」可用；
+mac 真机的直连行为仍以 mac 上跑一次 `环境自检.command` 为准。
+
 ## 开发 / 维护
 
 环境：Python 3.9+（推荐 3.13）。`pip install -r requirements.txt`；开发测试用 `pip install -e ".[dev]"`。
@@ -237,13 +277,24 @@ BiddingInformation/
 
 ---
 
-## 已知「需验证」项
+## 实测结论与「需验证」项
 
-1. 本机是 Windows 开发机，`.command` 只做了 `bash -n` 语法检查与文本契约校验，
-   **mac 上双击运行、Gatekeeper 放行、launchd 定时触发均需在真实 mac 上验证**；
-2. 各源当前可用性（老站 API、聚合站反爬、云南站接口）与 mac 直连可达性；
-3. 乙方宝 0 条的确切成因与恢复情况；3 个休眠源复测后能否启用；
-4. 官方 Python pkg / Homebrew 安装路径在用户具体 mac 机型上的差异；
+**2026-11-13 实跑（Windows / Python 3.13.14 独立 venv / 经本机代理）**：
+
+- `doctor` 环境自检全通过，4 个启用源站点均 HTTP 200；`--probe` 逐源真实试抓共取回 **90 条**；
+- 完整流程 `python -m scripts.bidding_scraper.main` 成功：新增 90 条、**843 → 933 条**、
+  `data_as_of` 更新为 **2026-11-13**，页面/RSS/平台包原子写重建成功；
+- 本次有效源为**中国铁塔电子采购平台**（90 条）；中国招标投标公共服务平台、乙方宝、
+  云南源均为 0 条。云南源抓到 20 条工程建设公告，因非铁塔被相关性链正确剔除；
+- 实测发现并修复云南源字段解析（主键 `guid` / 公告时间 `bulletinissuetime` / 地区 `areaName`），
+  旧实现会得到空 id、空日期与失效详情链接；新增 4 个离线回归用例，全量 **177 passed**。
+
+**仍需在 mac 真机验证**（本机是 Windows，结论不能外推）：
+
+1. `.command` 双击运行、Gatekeeper 放行、launchd 定时触发（本机只做了 `bash -n` 与文本契约校验）；
+2. mac **直连（无代理）** 下各源可用性与实际取回条数；官方 Python pkg / Homebrew 安装路径差异；
+3. 中国招标投标公共服务平台与乙方宝 0 条的确切成因；3 个休眠源复测后能否启用；
+4. mac Safari 中文文件名下载、`file://` 页面渲染、连续两日产物时间戳递增；
 5. `docs/PRD.md` 与 `docs/ARCHITECTURE.md` 仍保留早期跨系统选型的描述，
    运行时形态以本 README 与 `docs/使用说明.md` 为准。
 

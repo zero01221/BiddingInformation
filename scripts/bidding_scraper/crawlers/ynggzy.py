@@ -103,18 +103,43 @@ class YnggzyCrawler(BaseCrawler):
             if not title:
                 return None
             
-            # 构建详情链接
-            bulletin_id = row.get("bulletinid", "")
-            url = f"https://ggzy.yn.gov.cn/#/newDetail?category={category}&id={bulletin_id}"
+            # 源站实际字段（2026-11 实测）：主键为 guid，公告时间为 bulletinissuetime。
+            # 旧实现只读 bulletinid/releasetime/publishdate，会得到空 id 与空日期，
+            # 导致详情链接失效、公告日期被标为 date_valid=0。此处补齐字段回退链。
+            bulletin_id = (
+                row.get("bulletinid")
+                or row.get("guid")
+                or row.get("jyGuid")
+                or ""
+            )
+            source_url = str(row.get("url") or "").strip()
+            if source_url.lower() in ("", "none", "null"):
+                source_url = ""
+            url = source_url or (
+                f"https://ggzy.yn.gov.cn/#/newDetail?category={category}&id={bulletin_id}"
+            )
+
+            # 提取日期：优先公告发布时间，兼容历史字段与创建时间。
+            date_str = (
+                row.get("bulletinissuetime", "")
+                or row.get("releasetime", "")
+                or row.get("publishdate", "")
+                or row.get("data20260327ReleaseTime", "")
+                or row.get("createTime", "")
+                or ""
+            )
+            date = extract_date(str(date_str)) if date_str else ""
+
+            # 地区信息：源站字段为驼峰 areaName，另有 jyptid（州市名）可用。
+            area = (
+                row.get("areaName", "")
+                or row.get("areaname", "")
+                or row.get("districtname", "")
+                or row.get("jyptid", "")
+                or ""
+            )
             
-            # 提取日期
-            date_str = row.get("releasetime", "") or row.get("publishdate", "")
-            date = extract_date(date_str) or ""
-            
-            # 地区信息
-            area = row.get("areaname", "") or row.get("districtname", "")
-            
-            # bulletinid 为源站业务主键；云南站点天然全省，地区仍由
+            # guid/bulletinid 为源站业务主键；云南站点天然全省，地区仍由
             # BaseCrawler.run() 的处理链统一打标（只打标不过滤）。
             bid_type_map = {
                 "gcjs": "招标公告",

@@ -95,11 +95,11 @@ class TestSingleFileOffline:
         ):
             assert forbidden not in lowered, f"file:// 下存在外部请求: {forbidden}"
 
-    def test_inline_payload_is_valid_json_with_843_items(
+    def test_inline_payload_is_valid_json_with_items(
         self, built_index_html, inline_block_of
     ):
         payload = json.loads(inline_block_of(built_index_html))
-        assert len(payload["items"]) == 843
+        assert len(payload["items"]) >= 843  # 历史无损，新增公告只会让条数增加
         assert payload["meta"]["data_as_of"]
 
     def test_no_bid_type_filter_control(self, web_dir):

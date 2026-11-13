@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -138,8 +139,8 @@ class TestRealArtifactIsSafe:
         inline = inline_block_of(built_index_html)
         assert "</script" not in inline.lower()
         payload = json.loads(inline)
-        assert len(payload["items"]) == 843
-        assert payload["meta"]["data_as_of"] == "2026-08-01"
+        assert len(payload["items"]) >= 843  # 数据会每日增长，只保证历史无损
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", payload["meta"]["data_as_of"] or "")
 
     def test_build_does_not_touch_real_artifact(self, index_html_path):
         # StaticBuilder.build 只返回字符串，绝不写盘（零改动约束）

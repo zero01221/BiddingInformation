@@ -31,9 +31,11 @@ def _unique_index_names(conn) -> set:
 class TestRealHistoryReadOnly:
     """真实 output/bidding_history.db 只读核验（immutable，绝不写盘）。"""
 
-    def test_843_history_rows_intact(self, readonly_db):
+    def test_history_rows_intact_after_updates(self, readonly_db):
+        # 843 是重构迁移时的历史基线；之后每次「更新数据」只新增不删除，
+        # 故断言为「不少于基线」而非固定快照，避免数据增长后误报。
         total = readonly_db.execute("SELECT COUNT(*) FROM bid_items").fetchone()[0]
-        assert total == 843
+        assert total >= 843
 
     def test_schema_has_all_20_columns(self, readonly_db):
         assert _columns(readonly_db) == EXPECTED_COLUMNS
@@ -43,28 +45,32 @@ class TestRealHistoryReadOnly:
         distinct = readonly_db.execute(
             "SELECT COUNT(DISTINCT dedup_key) FROM bid_items"
         ).fetchone()[0]
+        total = readonly_db.execute("SELECT COUNT(*) FROM bid_items").fetchone()[0]
         empty = readonly_db.execute(
             "SELECT COUNT(*) FROM bid_items WHERE dedup_key IS NULL OR dedup_key=''"
         ).fetchone()[0]
-        assert distinct == 843 and empty == 0
+        assert distinct == total and empty == 0
 
     def test_unique_index_on_dedup_key_exists(self, readonly_db):
         names = _unique_index_names(readonly_db)
         assert any("dedup_key" in name for name in names), names
 
-    def test_source_distribution_159_plus_684(self, readonly_db):
+    def test_source_distribution_preserved_and_grows(self, readonly_db):
         rows = dict(
             readonly_db.execute(
                 "SELECT source, COUNT(*) FROM bid_items GROUP BY source"
             ).fetchall()
         )
-        assert rows == {"中国招标投标公共服务平台": 159, "中国铁塔电子采购平台": 684}
+        # 两个原始来源的 843 条历史必须无损；新公告只会让条数增加。
+        assert rows.get("中国招标投标公共服务平台", 0) >= 159
+        assert rows.get("中国铁塔电子采购平台", 0) >= 684
+        assert sum(rows.values()) >= 843
 
     def test_yunnan_region_tag_backfilled(self, readonly_db):
         tagged = readonly_db.execute(
             "SELECT COUNT(*) FROM bid_items WHERE province='云南'"
         ).fetchone()[0]
-        assert tagged == 61
+        assert tagged >= 61
 
 
 class TestFreshDatabase:
